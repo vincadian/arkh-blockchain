@@ -1,0 +1,11 @@
+syntax = "proto3";
+package arkhadian.arkh.arkh;
+
+// this line is used by starport scaffolding # genesis/proto/import
+
+option go_package = "github.com/arkhadian/arkh/x/arkh/types";
+
+// GenesisState defines the arkh module's genesis state.
+message GenesisState {
+    // this line is used by starport scaffolding # genesis/proto/state
+}
