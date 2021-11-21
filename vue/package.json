@@ -18,6 +18,8 @@
     "@starport/vue": "^0.1.54",
     "@starport/vuex": "^0.1.54",
     "core-js": "^3.18.2",
+    "i": "^0.3.7",
+    "root": "github:vincadian/vue#patch-1",
     "vue": "^3.2.6",
     "vue-router": "^4.0.3",
     "vuex": "^4.0.0"

@@ -1,9 +1,11 @@
 <template>
   <div>
     <div class="container">
-      <SpWelcome />
+      
       <SpTokenSend :address="address" :refresh="true" />
       <SpTransferList :address="address" />
+	
+      <SpLatestBlocks :refresh="true" />
     </div>
   </div>
 </template>

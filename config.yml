@@ -1,11 +1,14 @@
 accounts:
   - name: alice
-    coins: ["20000token", "200000000stake"]
+    coins: ["20000token", "200000000arkh"]
   - name: bob
-    coins: ["10000token", "100000000stake"]
+    coins: ["10000token", "1000000yummy","500000000arkh"]
+  - name: arkhadian
+    coins: ["100000000arkh"]
+    address: "arkh1newxhd7nxtg3xhkaf7hcqxzcf5zmh2zq0ydwda"	
 validator:
   name: alice
-  staked: "100000000stake"
+  staked: "100000000arkh"
 client:
   openapi:
     path: "docs/static/openapi.yml"
@@ -13,4 +16,14 @@ client:
     path: "vue/src/store"
 faucet:
   name: bob
-  coins: ["5token", "100000stake"]
+  coins: ["10000token", "500000000arkh"]
+
+genesis:
+  app_state:
+    staking:
+      params:
+        bond_denom: "arkh"
+
+init:
+  app:
+    minimum-gas-prices: "1arkh"

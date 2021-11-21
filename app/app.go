@@ -91,6 +91,9 @@ import (
 	arkhmodule "github.com/arkhadian/arkh/x/arkh"
 	arkhmodulekeeper "github.com/arkhadian/arkh/x/arkh/keeper"
 	arkhmoduletypes "github.com/arkhadian/arkh/x/arkh/types"
+	toolmodule "github.com/arkhadian/arkh/x/tool"
+	toolmodulekeeper "github.com/arkhadian/arkh/x/tool/keeper"
+	toolmoduletypes "github.com/arkhadian/arkh/x/tool/types"
 	// this line is used by starport scaffolding # stargate/app/moduleImport
 )
 
@@ -142,6 +145,8 @@ var (
 		transfer.AppModuleBasic{},
 		vesting.AppModuleBasic{},
 		arkhmodule.AppModuleBasic{},
+
+		toolmodule.AppModuleBasic{},
 		// this line is used by starport scaffolding # stargate/app/moduleBasic
 	)
 
@@ -154,6 +159,8 @@ var (
 		stakingtypes.NotBondedPoolName: {authtypes.Burner, authtypes.Staking},
 		govtypes.ModuleName:            {authtypes.Burner},
 		ibctransfertypes.ModuleName:    {authtypes.Minter, authtypes.Burner},
+
+		toolmoduletypes.ModuleName: {authtypes.Minter, authtypes.Burner, authtypes.Staking},
 		// this line is used by starport scaffolding # stargate/app/maccPerms
 	}
 )
@@ -211,6 +218,8 @@ type App struct {
 	ScopedTransferKeeper capabilitykeeper.ScopedKeeper
 
 	ArkhKeeper arkhmodulekeeper.Keeper
+
+	ToolKeeper toolmodulekeeper.Keeper
 	// this line is used by starport scaffolding # stargate/app/keeperDeclaration
 
 	// the module manager
@@ -245,6 +254,8 @@ func New(
 		govtypes.StoreKey, paramstypes.StoreKey, ibchost.StoreKey, upgradetypes.StoreKey, feegrant.StoreKey,
 		evidencetypes.StoreKey, ibctransfertypes.StoreKey, capabilitytypes.StoreKey,
 		arkhmoduletypes.StoreKey,
+
+		toolmoduletypes.StoreKey,
 		// this line is used by starport scaffolding # stargate/app/storeKey
 	)
 	tkeys := sdk.NewTransientStoreKeys(paramstypes.TStoreKey)
@@ -350,6 +361,15 @@ func New(
 	)
 	arkhModule := arkhmodule.NewAppModule(appCodec, app.ArkhKeeper)
 
+	app.ToolKeeper = *toolmodulekeeper.NewKeeper(
+		appCodec,
+		keys[toolmoduletypes.StoreKey],
+		keys[toolmoduletypes.MemStoreKey],
+
+		app.BankKeeper,
+	)
+	toolModule := toolmodule.NewAppModule(appCodec, app.ToolKeeper)
+
 	// this line is used by starport scaffolding # stargate/app/keeperDefinition
 
 	// Create static IBC router, add transfer route, then set and seal it
@@ -389,6 +409,8 @@ func New(
 		params.NewAppModule(app.ParamsKeeper),
 		transferModule,
 		arkhModule,
+
+		toolModule,
 		// this line is used by starport scaffolding # stargate/app/appModule
 	)
 
@@ -424,6 +446,8 @@ func New(
 		evidencetypes.ModuleName,
 		ibctransfertypes.ModuleName,
 		arkhmoduletypes.ModuleName,
+
+		toolmoduletypes.ModuleName,
 		// this line is used by starport scaffolding # stargate/app/initGenesis
 	)
 
@@ -612,6 +636,8 @@ func initParamsKeeper(appCodec codec.BinaryCodec, legacyAmino *codec.LegacyAmino
 	paramsKeeper.Subspace(ibctransfertypes.ModuleName)
 	paramsKeeper.Subspace(ibchost.ModuleName)
 	paramsKeeper.Subspace(arkhmoduletypes.ModuleName)
+
+	paramsKeeper.Subspace(toolmoduletypes.ModuleName)
 	// this line is used by starport scaffolding # stargate/app/paramSubspace
 
 	return paramsKeeper
