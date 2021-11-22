@@ -26,4 +26,4 @@ genesis:
 
 init:
   app:
-    minimum-gas-prices: "1arkh"
+    minimum-gas-prices: "0.000000001arkh"
