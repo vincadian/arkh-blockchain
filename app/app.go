@@ -94,7 +94,10 @@ import (
 	toolmodule "github.com/arkhadian/arkh/x/tool"
 	toolmodulekeeper "github.com/arkhadian/arkh/x/tool/keeper"
 	toolmoduletypes "github.com/arkhadian/arkh/x/tool/types"
-	// this line is used by starport scaffolding # stargate/app/moduleImport
+	wasmmodule "github.com/arkhadian/arkh/x/wasm"
+		wasmmodulekeeper "github.com/arkhadian/arkh/x/wasm/keeper"
+		wasmmoduletypes "github.com/arkhadian/arkh/x/wasm/types"
+// this line is used by starport scaffolding # stargate/app/moduleImport
 )
 
 const (
@@ -147,7 +150,8 @@ var (
 		arkhmodule.AppModuleBasic{},
 
 		toolmodule.AppModuleBasic{},
-		// this line is used by starport scaffolding # stargate/app/moduleBasic
+		wasmmodule.AppModuleBasic{},
+// this line is used by starport scaffolding # stargate/app/moduleBasic
 	)
 
 	// module account permissions
@@ -220,7 +224,9 @@ type App struct {
 	ArkhKeeper arkhmodulekeeper.Keeper
 
 	ToolKeeper toolmodulekeeper.Keeper
-	// this line is used by starport scaffolding # stargate/app/keeperDeclaration
+	
+		WasmKeeper wasmmodulekeeper.Keeper
+// this line is used by starport scaffolding # stargate/app/keeperDeclaration
 
 	// the module manager
 	mm *module.Manager
@@ -256,7 +262,8 @@ func New(
 		arkhmoduletypes.StoreKey,
 
 		toolmoduletypes.StoreKey,
-		// this line is used by starport scaffolding # stargate/app/storeKey
+		wasmmoduletypes.StoreKey,
+// this line is used by starport scaffolding # stargate/app/storeKey
 	)
 	tkeys := sdk.NewTransientStoreKeys(paramstypes.TStoreKey)
 	memKeys := sdk.NewMemoryStoreKeys(capabilitytypes.MemStoreKey)
@@ -370,7 +377,16 @@ func New(
 	)
 	toolModule := toolmodule.NewAppModule(appCodec, app.ToolKeeper)
 
-	// this line is used by starport scaffolding # stargate/app/keeperDefinition
+	
+		app.WasmKeeper = *wasmmodulekeeper.NewKeeper(
+			appCodec,
+			keys[wasmmoduletypes.StoreKey],
+			keys[wasmmoduletypes.MemStoreKey],
+			
+			)
+		wasmModule := wasmmodule.NewAppModule(appCodec, app.WasmKeeper)
+
+		// this line is used by starport scaffolding # stargate/app/keeperDefinition
 
 	// Create static IBC router, add transfer route, then set and seal it
 	ibcRouter := ibcporttypes.NewRouter()
@@ -411,7 +427,8 @@ func New(
 		arkhModule,
 
 		toolModule,
-		// this line is used by starport scaffolding # stargate/app/appModule
+		wasmModule,
+// this line is used by starport scaffolding # stargate/app/appModule
 	)
 
 	// During begin block slashing happens after distr.BeginBlocker so that
@@ -448,7 +465,8 @@ func New(
 		arkhmoduletypes.ModuleName,
 
 		toolmoduletypes.ModuleName,
-		// this line is used by starport scaffolding # stargate/app/initGenesis
+		wasmmoduletypes.ModuleName,
+// this line is used by starport scaffolding # stargate/app/initGenesis
 	)
 
 	app.mm.RegisterInvariants(&app.CrisisKeeper)
@@ -638,7 +656,8 @@ func initParamsKeeper(appCodec codec.BinaryCodec, legacyAmino *codec.LegacyAmino
 	paramsKeeper.Subspace(arkhmoduletypes.ModuleName)
 
 	paramsKeeper.Subspace(toolmoduletypes.ModuleName)
-	// this line is used by starport scaffolding # stargate/app/paramSubspace
+	paramsKeeper.Subspace(wasmmoduletypes.ModuleName)
+// this line is used by starport scaffolding # stargate/app/paramSubspace
 
 	return paramsKeeper
 }
