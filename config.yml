@@ -25,11 +25,11 @@ genesis:
     staking:
       params:
         bond_denom: "arkh"
-  gov:
-    deposit_params:
-      min_deposit:
-        - "amount": "10000000000"
-          "denom": "arkh"
+    gov:
+      deposit_params:
+        min_deposit:
+          - "amount": "10000000000"
+            "denom": "arkh"
 init:
   app:
     minimum-gas-prices: "0.0001arkh"
