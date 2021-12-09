@@ -3,7 +3,7 @@ accounts:
     coins: ["200000000000000arkh"]
     
   - name: bob
-    coins: ["500000000000000arkh"]
+    coins: ["500000000000000arkh", 1000000000000000000EUR, 1000000000000000000USD, 1000000000000000000CNY, 1000000000000000000GBP, 1000000000000000000AED,]
    
   - name: arkhadian
     coins: ["100000000000000arkh"]
@@ -30,6 +30,11 @@ genesis:
         min_deposit:
           - "amount": "10000000000"
             "denom": "arkh"
+    liquidity:
+      params:
+        pool_creation_fee:
+         - "amount": "4000"
+           "denom": "arkh"
 init:
   app:
-    minimum-gas-prices: "0.0001arkh"
+    minimum-gas-prices: "0.0000000001arkh"

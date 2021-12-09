@@ -95,9 +95,13 @@ import (
 	toolmodulekeeper "github.com/arkhadian/arkh/x/tool/keeper"
 	toolmoduletypes "github.com/arkhadian/arkh/x/tool/types"
 	wasmmodule "github.com/arkhadian/arkh/x/wasm"
-		wasmmodulekeeper "github.com/arkhadian/arkh/x/wasm/keeper"
-		wasmmoduletypes "github.com/arkhadian/arkh/x/wasm/types"
-// this line is used by starport scaffolding # stargate/app/moduleImport
+	wasmmodulekeeper "github.com/arkhadian/arkh/x/wasm/keeper"
+	wasmmoduletypes "github.com/arkhadian/arkh/x/wasm/types"
+
+	"github.com/gravity-devs/liquidity/x/liquidity"
+	liquiditykeeper "github.com/gravity-devs/liquidity/x/liquidity/keeper"
+	liquiditytypes "github.com/gravity-devs/liquidity/x/liquidity/types"
+	// this line is used by starport scaffolding # stargate/app/moduleImport
 )
 
 const (
@@ -147,11 +151,11 @@ var (
 		evidence.AppModuleBasic{},
 		transfer.AppModuleBasic{},
 		vesting.AppModuleBasic{},
+		liquidity.AppModuleBasic{},
 		arkhmodule.AppModuleBasic{},
-
 		toolmodule.AppModuleBasic{},
 		wasmmodule.AppModuleBasic{},
-// this line is used by starport scaffolding # stargate/app/moduleBasic
+		// this line is used by starport scaffolding # stargate/app/moduleBasic
 	)
 
 	// module account permissions
@@ -163,8 +167,8 @@ var (
 		stakingtypes.NotBondedPoolName: {authtypes.Burner, authtypes.Staking},
 		govtypes.ModuleName:            {authtypes.Burner},
 		ibctransfertypes.ModuleName:    {authtypes.Minter, authtypes.Burner},
-
-		toolmoduletypes.ModuleName: {authtypes.Minter, authtypes.Burner, authtypes.Staking},
+		liquiditytypes.ModuleName:      {authtypes.Minter, authtypes.Burner},
+		toolmoduletypes.ModuleName:     {authtypes.Minter, authtypes.Burner, authtypes.Staking},
 		// this line is used by starport scaffolding # stargate/app/maccPerms
 	}
 )
@@ -224,9 +228,11 @@ type App struct {
 	ArkhKeeper arkhmodulekeeper.Keeper
 
 	ToolKeeper toolmodulekeeper.Keeper
-	
-		WasmKeeper wasmmodulekeeper.Keeper
-// this line is used by starport scaffolding # stargate/app/keeperDeclaration
+
+	WasmKeeper      wasmmodulekeeper.Keeper
+	LiquidityKeeper liquiditykeeper.Keeper
+
+	// this line is used by starport scaffolding # stargate/app/keeperDeclaration
 
 	// the module manager
 	mm *module.Manager
@@ -258,12 +264,12 @@ func New(
 		authtypes.StoreKey, banktypes.StoreKey, stakingtypes.StoreKey,
 		minttypes.StoreKey, distrtypes.StoreKey, slashingtypes.StoreKey,
 		govtypes.StoreKey, paramstypes.StoreKey, ibchost.StoreKey, upgradetypes.StoreKey, feegrant.StoreKey,
-		evidencetypes.StoreKey, ibctransfertypes.StoreKey, capabilitytypes.StoreKey,
+		evidencetypes.StoreKey, liquiditytypes.StoreKey, ibctransfertypes.StoreKey, capabilitytypes.StoreKey,
 		arkhmoduletypes.StoreKey,
 
 		toolmoduletypes.StoreKey,
 		wasmmoduletypes.StoreKey,
-// this line is used by starport scaffolding # stargate/app/storeKey
+		// this line is used by starport scaffolding # stargate/app/storeKey
 	)
 	tkeys := sdk.NewTransientStoreKeys(paramstypes.TStoreKey)
 	memKeys := sdk.NewMemoryStoreKeys(capabilitytypes.MemStoreKey)
@@ -368,6 +374,15 @@ func New(
 	)
 	arkhModule := arkhmodule.NewAppModule(appCodec, app.ArkhKeeper)
 
+	app.LiquidityKeeper = liquiditykeeper.NewKeeper(
+		appCodec,
+		keys[liquiditytypes.StoreKey],
+		app.GetSubspace(liquiditytypes.ModuleName),
+		app.BankKeeper,
+		app.AccountKeeper,
+		app.DistrKeeper,
+	)
+
 	app.ToolKeeper = *toolmodulekeeper.NewKeeper(
 		appCodec,
 		keys[toolmoduletypes.StoreKey],
@@ -377,16 +392,14 @@ func New(
 	)
 	toolModule := toolmodule.NewAppModule(appCodec, app.ToolKeeper)
 
-	
-		app.WasmKeeper = *wasmmodulekeeper.NewKeeper(
-			appCodec,
-			keys[wasmmoduletypes.StoreKey],
-			keys[wasmmoduletypes.MemStoreKey],
-			
-			)
-		wasmModule := wasmmodule.NewAppModule(appCodec, app.WasmKeeper)
+	app.WasmKeeper = *wasmmodulekeeper.NewKeeper(
+		appCodec,
+		keys[wasmmoduletypes.StoreKey],
+		keys[wasmmoduletypes.MemStoreKey],
+	)
+	wasmModule := wasmmodule.NewAppModule(appCodec, app.WasmKeeper)
 
-		// this line is used by starport scaffolding # stargate/app/keeperDefinition
+	// this line is used by starport scaffolding # stargate/app/keeperDefinition
 
 	// Create static IBC router, add transfer route, then set and seal it
 	ibcRouter := ibcporttypes.NewRouter()
@@ -423,12 +436,14 @@ func New(
 		evidence.NewAppModule(app.EvidenceKeeper),
 		ibc.NewAppModule(app.IBCKeeper),
 		params.NewAppModule(app.ParamsKeeper),
+		liquidity.NewAppModule(appCodec, app.LiquidityKeeper, app.AccountKeeper, app.BankKeeper, app.DistrKeeper),
+
 		transferModule,
 		arkhModule,
 
 		toolModule,
 		wasmModule,
-// this line is used by starport scaffolding # stargate/app/appModule
+		// this line is used by starport scaffolding # stargate/app/appModule
 	)
 
 	// During begin block slashing happens after distr.BeginBlocker so that
@@ -437,11 +452,13 @@ func New(
 	// NOTE: staking module is required if HistoricalEntries param > 0
 	app.mm.SetOrderBeginBlockers(
 		upgradetypes.ModuleName, capabilitytypes.ModuleName, minttypes.ModuleName, distrtypes.ModuleName, slashingtypes.ModuleName,
-		evidencetypes.ModuleName, stakingtypes.ModuleName, ibchost.ModuleName,
+		evidencetypes.ModuleName, stakingtypes.ModuleName, ibchost.ModuleName, liquiditytypes.ModuleName,
+
 		feegrant.ModuleName,
 	)
 
-	app.mm.SetOrderEndBlockers(crisistypes.ModuleName, govtypes.ModuleName, stakingtypes.ModuleName)
+	app.mm.SetOrderEndBlockers(crisistypes.ModuleName, govtypes.ModuleName, liquiditytypes.ModuleName,
+		stakingtypes.ModuleName)
 
 	// NOTE: The genutils module must occur after staking so that pools are
 	// properly initialized with tokens from genesis accounts.
@@ -463,10 +480,11 @@ func New(
 		evidencetypes.ModuleName,
 		ibctransfertypes.ModuleName,
 		arkhmoduletypes.ModuleName,
+		liquiditytypes.ModuleName,
 
 		toolmoduletypes.ModuleName,
 		wasmmoduletypes.ModuleName,
-// this line is used by starport scaffolding # stargate/app/initGenesis
+		// this line is used by starport scaffolding # stargate/app/initGenesis
 	)
 
 	app.mm.RegisterInvariants(&app.CrisisKeeper)
@@ -654,10 +672,11 @@ func initParamsKeeper(appCodec codec.BinaryCodec, legacyAmino *codec.LegacyAmino
 	paramsKeeper.Subspace(ibctransfertypes.ModuleName)
 	paramsKeeper.Subspace(ibchost.ModuleName)
 	paramsKeeper.Subspace(arkhmoduletypes.ModuleName)
+	paramsKeeper.Subspace(liquiditytypes.ModuleName)
 
 	paramsKeeper.Subspace(toolmoduletypes.ModuleName)
 	paramsKeeper.Subspace(wasmmoduletypes.ModuleName)
-// this line is used by starport scaffolding # stargate/app/paramSubspace
+	// this line is used by starport scaffolding # stargate/app/paramSubspace
 
 	return paramsKeeper
 }
