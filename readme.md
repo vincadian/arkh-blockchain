@@ -8,6 +8,7 @@ cd binary
 tar tar -xzvf binary.tar.gz
 export PATH=$PATH:/workspace/arkh-blockchain/binary
 cd
+cp /workspace/arkh-blockchain/genesis/genesis.json .arkh/config
 
 arkhd start --p2p.seeds
 ```
