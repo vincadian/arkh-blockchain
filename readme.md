@@ -10,7 +10,7 @@ export PATH=$PATH:/workspace/arkh-blockchain/binary
 cd
 cp /workspace/arkh-blockchain/genesis/genesis.json .arkh/config
 
-arkhd start --p2p.seeds
+arkhd start --p2p.seeds 808f01d4a7507bf7478027a08d95c575e1b5fa3c@asc-dataseed.arkhadian.com:26656
 ```
 
 ### Install
