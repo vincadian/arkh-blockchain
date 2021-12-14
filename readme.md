@@ -1,7 +1,7 @@
 # arkh
 **arkh** is a blockchain built using Cosmos SDK and Tendermint and created with [Starport](https://github.com/tendermint/starport).
 
-
+[![Open in Gitpod](https://gitpod.io/button/open-in-gitpod.svg)](https://gitpod.io/#https://github.com/vincadian/arkh-blockchain)
 
 ### Install
 To install the latest version of your blockchain node's binary, execute the following command on your machine:
