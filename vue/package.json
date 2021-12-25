@@ -1,55 +1,27 @@
 {
-  "name": "@starport/template",
-  "version": "0.1.54",
-  "description": "A Vue 3 boilerplate project utilizing @starport/vue and @starport/vuex",
-  "author": "Tendermint, Inc <hello@tendermint.com>",
+  "name": "root",
   "private": true,
+  "description": "A monorepo of Vue and JS packages for Cosmos SDK apps",
+  "author": "Tendermint, Inc <hello@tendermint.com>",
+  "homepage": "https://github.com/tendermint/vue",
   "scripts": {
-    "serve": "vue-cli-service serve --mode=production",
-    "dev": "vue-cli-service serve",
-    "lint": "vue-cli-service lint",
-    "build": "vue-cli-service build",
-    "test:unit": "vue-cli-service test:unit"
+    "netlify:prepare": "lerna bootstrap  && lerna run build --scope='{@starport/client-js,@starport/vue,@starport/vuex}'",
+    "netlify:linkvue": "cd ./packages/vue && npm link",
+    "netlify:linkvuex": "cd ./packages/vuex && npm link",
+    "netlify:build": "npm run netlify:prepare && npm run netlify:linkvue && npm run netlify:linkvuex && cd ./packages/template && npm install && npm link @starport/vue @starport/vuex && npm run build -- --mode spn"
   },
-  "dependencies": {
-    "@cosmjs/launchpad": "^0.26.1",
-    "@cosmjs/proto-signing": "^0.26.1",
-    "@cosmjs/stargate": "^0.26.1",
-    "@starport/vue": "github:tendermint/vue/releases/tag/v0.1.55",
-    "@starport/vuex": "^0.1.54",
-    "core-js": "^3.18.2",
-    "i": "^0.3.7",
-    "root": "github:vincadian/vue#patch-1",
-    "vue": "^3.2.6",
-    "vue-router": "^4.0.3",
-    "vuex": "^4.0.0"
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tendermint/vue.git"
   },
+  "license": "Apache-2.0",
+  "licenses": [
+    {
+      "type": "Apache-2.0",
+      "url": "http://www.apache.org/licenses/LICENSE-2.0"
+    }
+  ],
   "devDependencies": {
-    "@babel/core": "^7.15.5",
-    "@babel/eslint-parser": "^7.15.7",
-    "@babel/plugin-transform-runtime": "^7.16.0",
-    "@vue/cli-plugin-babel": "~5.0.0-beta.4",
-    "@vue/cli-plugin-eslint": "~5.0.0-beta.4",
-    "@vue/cli-plugin-router": "~5.0.0-beta.4",
-    "@vue/cli-plugin-unit-jest": "~5.0.0-beta.4",
-    "@vue/cli-plugin-vuex": "~5.0.0-beta.4",
-    "@vue/cli-service": "~5.0.0-beta.4",
-    "@vue/compiler-sfc": "^3.2.19",
-    "@vue/eslint-config-prettier": "^6.0.0",
-    "@vue/test-utils": "^2.0.0-0",
-    "@vue/vue3-jest": "^27.0.0-alpha.1",
-    "babel-jest": "^27.2.4",
-    "eslint": "^7.32.0",
-    "eslint-plugin-prettier": "^3.4.1",
-    "eslint-plugin-vue": "^7.19.1",
-    "jest": "^27.2.4",
-    "lint-staged": "^11.2.0",
-    "node-polyfill-webpack-plugin": "^1.1.4",
-    "prettier": "^2.4.1",
-    "sass": "^1.42.1",
-    "sass-loader": "^12.1.0"
-  },
-  "gitHooks": {
-    "pre-commit": "lint-staged"
+    "lerna": "^4.0.0"
   }
 }

@@ -1,26 +1,12 @@
-## App UI Template
+# Monorepo for Starport front-end development
 
-[Vue.js](https://vuejs.org/)-based web app template for your Cosmos SDK blockchain. Use the template to quickly bootstrap your app. To learn more, check out the components in `@starport/vue` and the [Starport documentation](https://docs.starport.network/).
+This monorepo contains packages to simplify frontend development (primarily using Vue 3) for Starport-launched chains.
 
+The included packages are:
 
-## Project setup
+* [@starport/client-js](https://github.com/tendermint/vue/tree/develop/packages/client-js)
+* [@starport/vuex](https://github.com/tendermint/vue/tree/develop/packages/vuex)
+* [@starport/vue](https://github.com/tendermint/vue/tree/develop/packages/vue)
+* [App template](https://github.com/tendermint/vue/tree/develop/packages/template)
 
-```
-npm install
-```
-
-### Compiles and reloads the app on save for development
-
-```
-npm run dev
-```
-
-### Compiles and minifies for production
-
-```
-npm run build
-```
-
-### Customize configuration
-
-See [Configuration Reference](https://cli.vuejs.org/config/).
+Browse the READMEs in each package for details.
