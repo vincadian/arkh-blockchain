@@ -11,7 +11,7 @@ cd
 arkhd init validator
 cp /workspace/arkh-blockchain/genesis/genesis.json .arkh/config
 
-arkhd start --p2p.seeds 808f01d4a7507bf7478027a08d95c575e1b5fa3c@asc-dataseed.arkhadian.com:26656
+arkhd start --p2p.seeds 808f01d4a7507bf7478027a08d95c575e1b5fa3c@asc-dataseed.arkhadian.com:26656 --p2p.persistent_peers 808f01d4a7507bf7478027a08d95c575e1b5fa3c@asc-dataseed.arkhadian.com:26656,60c6a8074f75d69c75e7a464163d6652195eedc6@162.55.132.230:26656
 ```
 
 ### Install
