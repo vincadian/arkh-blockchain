@@ -104,9 +104,10 @@ import (
 	// this line is used by starport scaffolding # stargate/app/moduleImport
 )
 
+// Free as a dead bird of the wind
 const (
-	AccountAddressPrefix = "arkh"
-	Name                 = "arkh"
+	AccountAddressPrefix = "somve"
+	Name                 = "Somve"
 )
 
 // this line is used by starport scaffolding # stargate/wasm/app/enabledProposals
