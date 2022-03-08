@@ -104,14 +104,16 @@ import (
 	// this line is used by starport scaffolding # stargate/app/moduleImport
 )
 
+// Free as a dead bird of the wind
 const (
-	AccountAddressPrefix = "arkh"
-	Name                 = "arkh"
+	AccountAddressPrefix = "somve"
+	Name                 = "Somve"
 )
 
 // this line is used by starport scaffolding # stargate/wasm/app/enabledProposals
 
-func getGovProposalHandlers() []govclient.ProposalHandler {
+// Removed, we don't need governance
+/* func getGovProposalHandlers() []govclient.ProposalHandler {
 	var govProposalHandlers []govclient.ProposalHandler
 	// this line is used by starport scaffolding # stargate/app/govProposalHandlers
 
@@ -124,7 +126,7 @@ func getGovProposalHandlers() []govclient.ProposalHandler {
 	)
 
 	return govProposalHandlers
-}
+}*/
 
 var (
 	// DefaultNodeHome default home directories for the application daemon
@@ -356,12 +358,9 @@ func New(
 	transferModule := transfer.NewAppModule(app.TransferKeeper)
 
 	// Create evidence Keeper for to register the IBC light client misbehaviour evidence route
-	evidenceKeeper := evidencekeeper.NewKeeper(
-		appCodec, keys[evidencetypes.StoreKey], &app.StakingKeeper, app.SlashingKeeper,
-	)
-	// If evidence needs to be handled for the app, set routes in router here and seal
-	app.EvidenceKeeper = *evidenceKeeper
-
+	
+	// Remove evidence, we are birds.
+	
 	app.GovKeeper = govkeeper.NewKeeper(
 		appCodec, keys[govtypes.StoreKey], app.GetSubspace(govtypes.ModuleName), app.AccountKeeper, app.BankKeeper,
 		&stakingKeeper, govRouter,
