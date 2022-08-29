@@ -6,6 +6,8 @@ import (
 	"github.com/arkhadian/arkh/app"
 	svrcmd "github.com/cosmos/cosmos-sdk/server/cmd"
 	"github.com/tendermint/spm/cosmoscmd"
+	"github.com/arkhadian/arkh/app"
+
 )
 
 func main() {
