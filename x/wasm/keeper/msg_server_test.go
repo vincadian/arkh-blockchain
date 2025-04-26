@@ -5,9 +5,9 @@ import (
 	"testing"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
-    "github.com/arkhadian/arkh/x/wasm/types"
-    "github.com/arkhadian/arkh/x/wasm/keeper"
-    keepertest "github.com/arkhadian/arkh/testutil/keeper"
+	keepertest "github.com/vincadian/arkh-blockchain/testutil/keeper"
+	"github.com/vincadian/arkh-blockchain/x/wasm/keeper"
+	"github.com/vincadian/arkh-blockchain/x/wasm/types"
 )
 
 func setupMsgServer(t testing.TB) (types.MsgServer, context.Context) {

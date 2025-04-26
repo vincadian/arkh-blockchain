@@ -3,10 +3,10 @@ package wasm_test
 import (
 	"testing"
 
-	keepertest "github.com/arkhadian/arkh/testutil/keeper"
-	"github.com/arkhadian/arkh/x/wasm"
-	"github.com/arkhadian/arkh/x/wasm/types"
 	"github.com/stretchr/testify/require"
+	keepertest "github.com/vincadian/arkh-blockchain/testutil/keeper"
+	"github.com/vincadian/arkh-blockchain/x/wasm"
+	"github.com/vincadian/arkh-blockchain/x/wasm/types"
 )
 
 func TestGenesis(t *testing.T) {

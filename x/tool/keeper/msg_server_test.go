@@ -4,10 +4,10 @@ import (
 	"context"
 	"testing"
 
-	keepertest "github.com/arkhadian/arkh/testutil/keeper"
-	"github.com/arkhadian/arkh/x/tool/keeper"
-	"github.com/arkhadian/arkh/x/tool/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	keepertest "github.com/vincadian/arkh-blockchain/testutil/keeper"
+	"github.com/vincadian/arkh-blockchain/x/tool/keeper"
+	"github.com/vincadian/arkh-blockchain/x/tool/types"
 )
 
 func setupMsgServer(t testing.TB) (types.MsgServer, context.Context) {

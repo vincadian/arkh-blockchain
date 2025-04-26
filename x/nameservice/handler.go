@@ -3,10 +3,10 @@ package nameservice
 import (
 	"fmt"
 
-	"github.com/arkhadian/arkh/x/nameservice/keeper"
-	"github.com/arkhadian/arkh/x/nameservice/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
+	"github.com/vincadian/arkh-blockchain/x/nameservice/keeper"
+	"github.com/vincadian/arkh-blockchain/x/nameservice/types"
 )
 
 // NewHandler ...

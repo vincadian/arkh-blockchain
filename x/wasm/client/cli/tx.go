@@ -8,7 +8,7 @@ import (
 
 	"github.com/cosmos/cosmos-sdk/client"
 	// "github.com/cosmos/cosmos-sdk/client/flags"
-	"github.com/arkhadian/arkh/x/wasm/types"
+	"github.com/vincadian/arkh-blockchain/x/wasm/types"
 )
 
 var (
@@ -18,7 +18,6 @@ var (
 const (
 	flagPacketTimeoutTimestamp = "packet-timeout-timestamp"
 )
-
 
 // GetTxCmd returns the transaction commands for this module
 func GetTxCmd() *cobra.Command {
@@ -32,5 +31,5 @@ func GetTxCmd() *cobra.Command {
 
 	// this line is used by starport scaffolding # 1
 
-	return cmd 
+	return cmd
 }

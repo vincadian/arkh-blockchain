@@ -3,10 +3,10 @@ package tool_test
 import (
 	"testing"
 
-	keepertest "github.com/arkhadian/arkh/testutil/keeper"
-	"github.com/arkhadian/arkh/x/tool"
-	"github.com/arkhadian/arkh/x/tool/types"
 	"github.com/stretchr/testify/require"
+	keepertest "github.com/vincadian/arkh-blockchain/testutil/keeper"
+	"github.com/vincadian/arkh-blockchain/x/tool"
+	"github.com/vincadian/arkh-blockchain/x/tool/types"
 )
 
 func TestGenesis(t *testing.T) {

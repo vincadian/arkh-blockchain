@@ -4,10 +4,10 @@ import (
 	"context"
 	"testing"
 
-	keepertest "github.com/arkhadian/arkh/testutil/keeper"
-	"github.com/arkhadian/arkh/x/nameservice/keeper"
-	"github.com/arkhadian/arkh/x/nameservice/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	keepertest "github.com/vincadian/arkh-blockchain/testutil/keeper"
+	"github.com/vincadian/arkh-blockchain/x/nameservice/keeper"
+	"github.com/vincadian/arkh-blockchain/x/nameservice/types"
 )
 
 func setupMsgServer(t testing.TB) (types.MsgServer, context.Context) {

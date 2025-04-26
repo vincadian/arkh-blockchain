@@ -1,7 +1,7 @@
 package keeper
 
 import (
-	"github.com/arkhadian/arkh/x/wasm/types"
+	"github.com/vincadian/arkh-blockchain/x/wasm/types"
 )
 
 type msgServer struct {

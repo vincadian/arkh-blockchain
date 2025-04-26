@@ -10,7 +10,7 @@ import (
 	// "github.com/cosmos/cosmos-sdk/client/flags"
 	// sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"github.com/arkhadian/arkh/x/wasm/types"
+	"github.com/vincadian/arkh-blockchain/x/wasm/types"
 )
 
 // GetQueryCmd returns the cli query commands for this module
@@ -26,6 +26,5 @@ func GetQueryCmd(queryRoute string) *cobra.Command {
 
 	// this line is used by starport scaffolding # 1
 
-	return cmd 
+	return cmd
 }
-

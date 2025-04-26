@@ -3,10 +3,10 @@ package tool
 import (
 	"fmt"
 
-	"github.com/arkhadian/arkh/x/tool/keeper"
-	"github.com/arkhadian/arkh/x/tool/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
+	"github.com/vincadian/arkh-blockchain/x/tool/keeper"
+	"github.com/vincadian/arkh-blockchain/x/tool/types"
 )
 
 // NewHandler ...

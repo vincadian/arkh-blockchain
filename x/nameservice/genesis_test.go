@@ -3,10 +3,10 @@ package nameservice_test
 import (
 	"testing"
 
-	keepertest "github.com/arkhadian/arkh/testutil/keeper"
-	"github.com/arkhadian/arkh/x/nameservice"
-	"github.com/arkhadian/arkh/x/nameservice/types"
 	"github.com/stretchr/testify/require"
+	keepertest "github.com/vincadian/arkh-blockchain/testutil/keeper"
+	"github.com/vincadian/arkh-blockchain/x/nameservice"
+	"github.com/vincadian/arkh-blockchain/x/nameservice/types"
 )
 
 func TestGenesis(t *testing.T) {

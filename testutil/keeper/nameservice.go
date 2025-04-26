@@ -3,8 +3,6 @@ package keeper
 import (
 	"testing"
 
-	"github.com/arkhadian/arkh/x/nameservice/keeper"
-	"github.com/arkhadian/arkh/x/nameservice/types"
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/store"
@@ -14,6 +12,8 @@ import (
 	"github.com/tendermint/tendermint/libs/log"
 	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
 	tmdb "github.com/tendermint/tm-db"
+	"github.com/vincadian/arkh-blockchain/x/nameservice/keeper"
+	"github.com/vincadian/arkh-blockchain/x/nameservice/types"
 )
 
 func NameserviceKeeper(t testing.TB) (*keeper.Keeper, sdk.Context) {

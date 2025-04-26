@@ -4,9 +4,9 @@ import (
 	"testing"
 
 	keepertest "github.com/arkhadian/arkh/testutil/keeper"
-	"github.com/arkhadian/arkh/x/utility"
-	"github.com/arkhadian/arkh/x/utility/types"
 	"github.com/stretchr/testify/require"
+	"github.com/vincadian/arkh-blockchain/x/utility"
+	"github.com/vincadian/arkh-blockchain/x/utility/types"
 )
 
 func TestGenesis(t *testing.T) {

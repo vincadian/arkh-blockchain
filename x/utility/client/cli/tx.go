@@ -8,7 +8,7 @@ import (
 
 	"github.com/cosmos/cosmos-sdk/client"
 	// "github.com/cosmos/cosmos-sdk/client/flags"
-	"github.com/arkhadian/arkh/x/utility/types"
+	"github.com/vincadian/arkh-blockchain/x/utility/types"
 )
 
 var (

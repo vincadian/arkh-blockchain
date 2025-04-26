@@ -3,8 +3,8 @@ package types_test
 import (
 	"testing"
 
-	"github.com/arkhadian/arkh/x/utility/types"
 	"github.com/stretchr/testify/require"
+	"github.com/vincadian/arkh-blockchain/x/utility/types"
 )
 
 func TestGenesisState_Validate(t *testing.T) {

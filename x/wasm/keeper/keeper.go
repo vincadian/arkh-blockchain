@@ -7,7 +7,7 @@ import (
 
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/arkhadian/arkh/x/wasm/types"
+	"github.com/vincadian/arkh-blockchain/x/wasm/types"
 )
 
 type (
@@ -15,24 +15,19 @@ type (
 		cdc      codec.BinaryCodec
 		storeKey sdk.StoreKey
 		memKey   sdk.StoreKey
-		
-		
 	}
 )
 
 func NewKeeper(
-    cdc codec.BinaryCodec,
-    storeKey,
-    memKey sdk.StoreKey,
-    
-    
+	cdc codec.BinaryCodec,
+	storeKey,
+	memKey sdk.StoreKey,
+
 ) *Keeper {
 	return &Keeper{
 		cdc:      cdc,
 		storeKey: storeKey,
 		memKey:   memKey,
-		
-		
 	}
 }
 

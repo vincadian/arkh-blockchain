@@ -4,9 +4,9 @@ import (
 	"fmt"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/arkhadian/arkh/x/wasm/keeper"
-	"github.com/arkhadian/arkh/x/wasm/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
+	"github.com/vincadian/arkh-blockchain/x/wasm/keeper"
+	"github.com/vincadian/arkh-blockchain/x/wasm/types"
 )
 
 // NewHandler ...

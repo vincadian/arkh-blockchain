@@ -3,6 +3,7 @@ package arkh
 import (
 	"encoding/json"
 	"fmt"
+
 	// this line is used by starport scaffolding # 1
 
 	"github.com/gorilla/mux"
@@ -11,14 +12,14 @@ import (
 
 	abci "github.com/tendermint/tendermint/abci/types"
 
-	"github.com/arkhadian/arkh/x/arkh/client/cli"
-	"github.com/arkhadian/arkh/x/arkh/keeper"
-	"github.com/arkhadian/arkh/x/arkh/types"
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
 	cdctypes "github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
+	"github.com/vincadian/arkh-blockchain/x/arkh/client/cli"
+	"github.com/vincadian/arkh-blockchain/x/arkh/keeper"
+	"github.com/vincadian/arkh-blockchain/x/arkh/types"
 )
 
 var (

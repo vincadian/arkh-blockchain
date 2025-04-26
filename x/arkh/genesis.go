@@ -1,9 +1,9 @@
 package arkh
 
 import (
-	"github.com/arkhadian/arkh/x/arkh/keeper"
-	"github.com/arkhadian/arkh/x/arkh/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/vincadian/arkh-blockchain/x/arkh/keeper"
+	"github.com/vincadian/arkh-blockchain/x/arkh/types"
 )
 
 // InitGenesis initializes the capability module's state from a provided genesis

@@ -1,9 +1,9 @@
 package nameservice
 
 import (
-	"github.com/arkhadian/arkh/x/nameservice/keeper"
-	"github.com/arkhadian/arkh/x/nameservice/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/vincadian/arkh-blockchain/x/nameservice/keeper"
+	"github.com/vincadian/arkh-blockchain/x/nameservice/types"
 )
 
 // InitGenesis initializes the capability module's state from a provided genesis

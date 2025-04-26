@@ -3,10 +3,10 @@ package utility
 import (
 	"fmt"
 
-	"github.com/arkhadian/arkh/x/utility/keeper"
-	"github.com/arkhadian/arkh/x/utility/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
+	"github.com/vincadian/arkh-blockchain/x/utility/keeper"
+	"github.com/vincadian/arkh-blockchain/x/utility/types"
 )
 
 // NewHandler ...

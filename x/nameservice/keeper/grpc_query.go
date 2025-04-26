@@ -1,7 +1,7 @@
 package keeper
 
 import (
-	"github.com/arkhadian/arkh/x/nameservice/types"
+	"github.com/vincadian/arkh-blockchain/x/nameservice/types"
 )
 
 var _ types.QueryServer = Keeper{}

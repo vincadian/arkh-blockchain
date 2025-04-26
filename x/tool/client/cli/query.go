@@ -10,7 +10,7 @@ import (
 	// "github.com/cosmos/cosmos-sdk/client/flags"
 	// sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"github.com/arkhadian/arkh/x/tool/types"
+	"github.com/vincadian/arkh-blockchain/x/tool/types"
 )
 
 // GetQueryCmd returns the cli query commands for this module

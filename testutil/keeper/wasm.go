@@ -3,8 +3,6 @@ package keeper
 import (
 	"testing"
 
-	"github.com/arkhadian/arkh/x/wasm/keeper"
-	"github.com/arkhadian/arkh/x/wasm/types"
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/store"
@@ -14,6 +12,8 @@ import (
 	"github.com/tendermint/tendermint/libs/log"
 	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
 	tmdb "github.com/tendermint/tm-db"
+	"github.com/vincadian/arkh-blockchain/x/wasm/keeper"
+	"github.com/vincadian/arkh-blockchain/x/wasm/types"
 )
 
 func WasmKeeper(t testing.TB) (*keeper.Keeper, sdk.Context) {
@@ -28,9 +28,9 @@ func WasmKeeper(t testing.TB) (*keeper.Keeper, sdk.Context) {
 
 	registry := codectypes.NewInterfaceRegistry()
 	k := keeper.NewKeeper(
-	    codec.NewProtoCodec(registry),
-	    storeKey,
-	    memStoreKey,
+		codec.NewProtoCodec(registry),
+		storeKey,
+		memStoreKey,
 	)
 
 	ctx := sdk.NewContext(stateStore, tmproto.Header{}, false, log.NewNopLogger())
