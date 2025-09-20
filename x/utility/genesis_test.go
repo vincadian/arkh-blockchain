@@ -3,7 +3,7 @@ package utility_test
 import (
 	"testing"
 
-	keepertest "github.com/arkhadian/arkh/testutil/keeper"
+	keepertest "github.com/vincadian/arkh-blockchain/testutil/keeper"
 	"github.com/stretchr/testify/require"
 	"github.com/vincadian/arkh-blockchain/x/utility"
 	"github.com/vincadian/arkh-blockchain/x/utility/types"

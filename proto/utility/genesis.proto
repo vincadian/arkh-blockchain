@@ -3,7 +3,7 @@ package arkhadian.arkh.utility;
 
 // this line is used by starport scaffolding # genesis/proto/import
 
-option go_package = "github.com/arkhadian/arkh/x/utility/types";
+option go_package = "github.com/vincadian/arkh-blockchain/x/utility/types";
 
 // GenesisState defines the utility module's genesis state.
 message GenesisState {

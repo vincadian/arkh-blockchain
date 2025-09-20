@@ -3,7 +3,7 @@ package arkhadian.arkh.wasm;
 
 // this line is used by starport scaffolding # proto/tx/import
 
-option go_package = "github.com/arkhadian/arkh/x/wasm/types";
+option go_package = "github.com/vincadian/arkh-blockchain/x/wasm/types";
 
 // Msg defines the Msg service.
 service Msg {

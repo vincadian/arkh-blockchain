@@ -3,7 +3,7 @@ package arkhadian.arkh.arkh;
 
 // this line is used by starport scaffolding # proto/tx/import
 
-option go_package = "github.com/arkhadian/arkh/x/arkh/types";
+option go_package = "github.com/vincadian/arkh-blockchain/x/arkh/types";
 
 // Msg defines the Msg service.
 service Msg {

@@ -3,16 +3,16 @@ package keeper
 import (
 	"testing"
 
-	"github.com/arkhadian/arkh/x/arkh/keeper"
-	"github.com/arkhadian/arkh/x/arkh/types"
+	"github.com/vincadian/arkh-blockchain/x/arkh/keeper"
+	"github.com/vincadian/arkh-blockchain/x/arkh/types"
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
-	"github.com/cosmos/cosmos-sdk/store"
-	storetypes "github.com/cosmos/cosmos-sdk/store/types"
+	"cosmossdk.io/store"
+	storetypes "cosmossdk.io/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/require"
-	"github.com/tendermint/tendermint/libs/log"
-	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
+	"github.com/cometbft/cometbft/libs/log"
+	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	tmdb "github.com/tendermint/tm-db"
 )
 
