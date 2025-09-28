@@ -3,7 +3,7 @@ package simapp
 import (
 	"time"
 
-	"cosmossdk.io/simapp"
+	// "cosmossdk.io/simapp" // Removed to avoid dependency conflicts
 	// Note: tendermint/spm/cosmoscmd deprecated in Cosmos SDK v0.53
 	abci "github.com/cometbft/cometbft/abci/types"
 	"github.com/cometbft/cometbft/libs/log"

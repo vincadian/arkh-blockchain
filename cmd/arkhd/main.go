@@ -3,13 +3,16 @@ package main
 import (
 	"os"
 
-	"github.com/cosmos/cosmos-sdk/server"
 	"github.com/vincadian/arkh-blockchain/app"
 )
 
 func main() {
-	rootCmd, _ := app.NewRootCmd()
-	if err := server.Execute(rootCmd, app.DefaultNodeHome); err != nil {
+	rootCmd, err := app.NewRootCmd()
+	if err != nil {
+		os.Exit(1)
+	}
+
+	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}
 }
