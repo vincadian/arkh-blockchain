@@ -820,6 +820,10 @@ func initRootCmd(rootCmd *cobra.Command, encodingConfig EncodingConfig) {
 	// Register module commands selectively to avoid issues with incomplete modules
 	// Only register commands for modules that have proper CLI implementations
 
+	// Set up keyring configuration
+	rootCmd.PersistentFlags().String("keyring-backend", "os", "Select keyring's backend (os|file|kwallet|pass|test)")
+	rootCmd.PersistentFlags().String("home", DefaultNodeHome, "The application home directory")
+
 	// Add keys command - this is the main missing command
 	rootCmd.AddCommand(keys.Commands())
 
@@ -962,4 +966,3 @@ contain valid denominations. Accounts may optionally be supplied with vesting pa
 		},
 	}
 }
-
