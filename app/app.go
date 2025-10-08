@@ -1,6 +1,7 @@
 package app
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -802,6 +803,26 @@ func MakeEncodingConfig() EncodingConfig {
 	ModuleBasics.RegisterInterfaces(encodingConfig.InterfaceRegistry)
 
 	return encodingConfig
+}
+
+// GetDefaultGenesis returns the default genesis state with custom denominations
+func GetDefaultGenesis() map[string]json.RawMessage {
+	encodingConfig := MakeEncodingConfig()
+	genesis := ModuleBasics.DefaultGenesis(encodingConfig.Marshaler)
+	
+	// Override mint module to use "arkh" instead of "stake"
+	var mintGenesis minttypes.GenesisState
+	encodingConfig.Marshaler.MustUnmarshalJSON(genesis[minttypes.ModuleName], &mintGenesis)
+	mintGenesis.Params.MintDenom = "arkh"
+	genesis[minttypes.ModuleName] = encodingConfig.Marshaler.MustMarshalJSON(&mintGenesis)
+	
+	// Override staking module to use "arkh" instead of "stake"
+	var stakingGenesis stakingtypes.GenesisState
+	encodingConfig.Marshaler.MustUnmarshalJSON(genesis[stakingtypes.ModuleName], &stakingGenesis)
+	stakingGenesis.Params.BondDenom = "arkh"
+	genesis[stakingtypes.ModuleName] = encodingConfig.Marshaler.MustMarshalJSON(&stakingGenesis)
+	
+	return genesis
 }
 
 // NewRootCmd creates a new root command for the application
