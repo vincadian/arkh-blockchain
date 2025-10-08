@@ -15,18 +15,16 @@ import (
 	dbm "github.com/cosmos/cosmos-db"
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/client"
-
-	// "github.com/cosmos/cosmos-sdk/client/debug"
+	"github.com/cosmos/cosmos-sdk/client/keys"
+	"github.com/cosmos/cosmos-sdk/server/api"
+	"github.com/cosmos/cosmos-sdk/server/config"
+	servertypes "github.com/cosmos/cosmos-sdk/server/types"
 
 	// Note: tmservice moved in Cosmos SDK v0.53
 	storetypes "cosmossdk.io/store/types"
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/codec/types"
 
-	// "github.com/cosmos/cosmos-sdk/server"
-	"github.com/cosmos/cosmos-sdk/server/api"
-	"github.com/cosmos/cosmos-sdk/server/config"
-	servertypes "github.com/cosmos/cosmos-sdk/server/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
 	"github.com/cosmos/cosmos-sdk/version"
@@ -62,8 +60,6 @@ import (
 	// feegrantmodule "cosmossdk.io/x/feegrant/module"
 	"github.com/cosmos/cosmos-sdk/x/genutil"
 	genutiltypes "github.com/cosmos/cosmos-sdk/x/genutil/types"
-
-	// genutilcli "github.com/cosmos/cosmos-sdk/x/genutil/client/cli"
 	"github.com/cosmos/cosmos-sdk/x/gov"
 
 	// Note: gov client removed in Cosmos SDK v0.53
@@ -824,6 +820,9 @@ func initRootCmd(rootCmd *cobra.Command, encodingConfig EncodingConfig) {
 	// Register module commands selectively to avoid issues with incomplete modules
 	// Only register commands for modules that have proper CLI implementations
 
+	// Add keys command - this is the main missing command
+	rootCmd.AddCommand(keys.Commands())
+
 	// Add liquidity transaction commands
 	liquidityTxCmd := liquiditymodule.AppModuleBasic{}.GetTxCmd()
 	liquidityTxCmd.Use = "liquidity"
@@ -963,3 +962,4 @@ contain valid denominations. Accounts may optionally be supplied with vesting pa
 		},
 	}
 }
+
