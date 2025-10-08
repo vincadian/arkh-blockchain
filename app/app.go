@@ -15,6 +15,7 @@ import (
 	dbm "github.com/cosmos/cosmos-db"
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/client"
+	"github.com/cosmos/cosmos-sdk/client/flags"
 	"github.com/cosmos/cosmos-sdk/client/keys"
 	"github.com/cosmos/cosmos-sdk/server/api"
 	"github.com/cosmos/cosmos-sdk/server/config"
@@ -95,7 +96,7 @@ import (
 	// "github.com/spf13/cast"
 	"github.com/spf13/cobra"
 	// Note: tendermint/spm/cosmoscmd deprecated in Cosmos SDK v0.53
-	// tmcli "github.com/cometbft/cometbft/libs/cli"
+	tmcli "github.com/cometbft/cometbft/libs/cli"
 	// Temporarily commented out custom modules for Cosmos SDK v0.53 compatibility testing
 	// arkhmodule "github.com/vincadian/arkh-blockchain/x/arkh"
 	// arkhmodulekeeper "github.com/vincadian/arkh-blockchain/x/arkh/keeper"
@@ -821,23 +822,83 @@ func initRootCmd(rootCmd *cobra.Command, encodingConfig EncodingConfig) {
 	// Only register commands for modules that have proper CLI implementations
 
 	// Set up keyring configuration
-	rootCmd.PersistentFlags().String("keyring-backend", "os", "Select keyring's backend (os|file|kwallet|pass|test)")
-	rootCmd.PersistentFlags().String("home", DefaultNodeHome, "The application home directory")
+	rootCmd.PersistentFlags().String(flags.FlagHome, DefaultNodeHome, "The application home directory")
+	rootCmd.PersistentFlags().String(flags.FlagKeyringBackend, flags.DefaultKeyringBackend, "Select keyring's backend (os|file|kwallet|pass|test)")
+	rootCmd.PersistentFlags().String(flags.FlagChainID, "arkh-testnet-1", "The network chain ID")
+
+	// Add Tendermint CLI commands for standard functionality
+	rootCmd.AddCommand(tmcli.NewCompletionCmd(rootCmd, true))
 
 	// Add keys command - this is the main missing command
-	rootCmd.AddCommand(keys.Commands())
+	// Try to fix keyring nil pointer issue by properly configuring the keys command
+	keysCmd := keys.Commands()
 
-	// Add liquidity transaction commands
-	liquidityTxCmd := liquiditymodule.AppModuleBasic{}.GetTxCmd()
-	liquidityTxCmd.Use = "liquidity"
-	liquidityTxCmd.Short = "Liquidity transaction subcommands"
-	rootCmd.AddCommand(liquidityTxCmd)
+	// Add proper client context configuration
+	clientCtx := client.Context{}.
+		WithCodec(encodingConfig.Marshaler).
+		WithInterfaceRegistry(encodingConfig.InterfaceRegistry).
+		WithTxConfig(encodingConfig.TxConfig).
+		WithLegacyAmino(encodingConfig.Amino).
+		WithInput(os.Stdin).
+		WithAccountRetriever(authtypes.AccountRetriever{}).
+		WithHomeDir(DefaultNodeHome).
+		WithViper("ARKH")
 
-	// Add liquidity query commands
-	liquidityQueryCmd := liquiditymodule.AppModuleBasic{}.GetQueryCmd()
-	liquidityQueryCmd.Use = "query-liquidity"
-	liquidityQueryCmd.Short = "Querying commands for the liquidity module"
-	rootCmd.AddCommand(liquidityQueryCmd)
+	// Set the client context for the keys command
+	keysCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		// Initialize client context
+		clientCtx = clientCtx.WithCmdContext(cmd.Context())
+		return client.SetCmdClientContextHandler(clientCtx, cmd)
+	}
+
+	rootCmd.AddCommand(keysCmd)
+
+	// Add tx command by aggregating all module tx commands
+	txCmd := &cobra.Command{
+		Use:   "tx",
+		Short: "Transaction subcommands",
+		Long:  "Transaction subcommands for creating and managing transactions",
+	}
+
+	// Add module tx commands
+	txCmd.AddCommand(liquiditymodule.AppModuleBasic{}.GetTxCmd())
+	// Add other module tx commands when they're enabled
+	// txCmd.AddCommand(arkhmodule.AppModuleBasic{}.GetTxCmd())
+	// txCmd.AddCommand(toolmodule.AppModuleBasic{}.GetTxCmd())
+	// txCmd.AddCommand(utilitymodule.AppModuleBasic{}.GetTxCmd())
+	// txCmd.AddCommand(wasmmodule.AppModuleBasic{}.GetTxCmd())
+
+	rootCmd.AddCommand(txCmd)
+
+	// Add query command by aggregating all module query commands
+	queryCmd := &cobra.Command{
+		Use:   "query",
+		Short: "Querying subcommands",
+		Long:  "Querying subcommands for querying blockchain state",
+	}
+
+	// Add module query commands
+	queryCmd.AddCommand(liquiditymodule.AppModuleBasic{}.GetQueryCmd())
+	// Add other module query commands when they're enabled
+	// queryCmd.AddCommand(arkhmodule.AppModuleBasic{}.GetQueryCmd())
+	// queryCmd.AddCommand(toolmodule.AppModuleBasic{}.GetQueryCmd())
+	// queryCmd.AddCommand(utilitymodule.AppModuleBasic{}.GetQueryCmd())
+	// queryCmd.AddCommand(wasmmodule.AppModuleBasic{}.GetQueryCmd())
+
+	rootCmd.AddCommand(queryCmd)
+
+	// Add status command for node status
+	rootCmd.AddCommand(
+		&cobra.Command{
+			Use:   "status",
+			Short: "Query remote node for status",
+			Long:  "Query remote node for status information",
+			RunE: func(cmd *cobra.Command, args []string) error {
+				fmt.Println("Node status command - placeholder implementation")
+				return nil
+			},
+		},
+	)
 
 	// Add additional commands
 	rootCmd.AddCommand(
@@ -944,8 +1005,6 @@ log_format = "plain"
 		},
 	)
 
-	// Add chain-id flag
-	rootCmd.PersistentFlags().String("chain-id", "arkh-testnet-1", "Chain ID")
 }
 
 // AddGenesisAccountCmd returns add-genesis-account cobra Command.
