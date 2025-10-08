@@ -119,7 +119,7 @@
     "crisis": {
       "constant_fee": {
         "amount": "1000",
-        "denom": "stake"
+        "denom": "arkh"
       }
     },
     "distribution": {
@@ -307,7 +307,7 @@
         "inflation_max": "0.200000000000000000",
         "inflation_min": "0.070000000000000000",
         "inflation_rate_change": "0.130000000000000000",
-        "mint_denom": "stake"
+        "mint_denom": "arkh"
       }
     },
     "params": null,

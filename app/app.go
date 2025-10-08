@@ -809,19 +809,25 @@ func MakeEncodingConfig() EncodingConfig {
 func GetDefaultGenesis() map[string]json.RawMessage {
 	encodingConfig := MakeEncodingConfig()
 	genesis := ModuleBasics.DefaultGenesis(encodingConfig.Marshaler)
-	
+
 	// Override mint module to use "arkh" instead of "stake"
 	var mintGenesis minttypes.GenesisState
 	encodingConfig.Marshaler.MustUnmarshalJSON(genesis[minttypes.ModuleName], &mintGenesis)
 	mintGenesis.Params.MintDenom = "arkh"
 	genesis[minttypes.ModuleName] = encodingConfig.Marshaler.MustMarshalJSON(&mintGenesis)
-	
+
 	// Override staking module to use "arkh" instead of "stake"
 	var stakingGenesis stakingtypes.GenesisState
 	encodingConfig.Marshaler.MustUnmarshalJSON(genesis[stakingtypes.ModuleName], &stakingGenesis)
 	stakingGenesis.Params.BondDenom = "arkh"
 	genesis[stakingtypes.ModuleName] = encodingConfig.Marshaler.MustMarshalJSON(&stakingGenesis)
-	
+
+	// Override crisis module to use "arkh" instead of "stake"
+	var crisisGenesis crisistypes.GenesisState
+	encodingConfig.Marshaler.MustUnmarshalJSON(genesis[crisistypes.ModuleName], &crisisGenesis)
+	crisisGenesis.ConstantFee.Denom = "arkh"
+	genesis[crisistypes.ModuleName] = encodingConfig.Marshaler.MustMarshalJSON(&crisisGenesis)
+
 	return genesis
 }
 
