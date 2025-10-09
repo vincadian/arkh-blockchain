@@ -10,9 +10,12 @@ import (
 
 	cosmoslog "cosmossdk.io/log"
 	abci "github.com/cometbft/cometbft/abci/types"
+	tmconfig "github.com/cometbft/cometbft/config"
 	tmjson "github.com/cometbft/cometbft/libs/json"
 	"github.com/cometbft/cometbft/libs/log"
 	tmos "github.com/cometbft/cometbft/libs/os"
+	tmtypes "github.com/cometbft/cometbft/types"
+	tmtime "github.com/cometbft/cometbft/types/time"
 	dbm "github.com/cosmos/cosmos-db"
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/client"
@@ -858,9 +861,24 @@ func initRootCmd(rootCmd *cobra.Command, encodingConfig EncodingConfig) {
 	rootCmd.AddCommand(tmcli.NewCompletionCmd(rootCmd, true))
 
 	// Add genesis-related commands
+	// Create a minimal module basics for init command
+	minimalModuleBasics := module.NewBasicManager(
+		auth.AppModuleBasic{},
+		genutil.AppModuleBasic{},
+		bank.AppModuleBasic{},
+		staking.AppModuleBasic{},
+		mint.AppModuleBasic{},
+		distr.AppModuleBasic{},
+		params.AppModuleBasic{},
+		crisis.AppModuleBasic{},
+		slashing.AppModuleBasic{},
+		upgrade.AppModuleBasic{},
+		vesting.AppModuleBasic{},
+	)
+
 	rootCmd.AddCommand(
-		genutilcli.InitCmd(ModuleBasics, DefaultNodeHome),
-		genutilcli.ValidateGenesisCmd(ModuleBasics),
+		NewInitCmd(minimalModuleBasics, DefaultNodeHome),
+		genutilcli.ValidateGenesisCmd(minimalModuleBasics),
 		AddGenesisAccountCmd(DefaultNodeHome),
 		&cobra.Command{
 			Use:   "gentx [key_name] [amount]",
@@ -969,6 +987,109 @@ func initRootCmd(rootCmd *cobra.Command, encodingConfig EncodingConfig) {
 		},
 	)
 
+}
+
+// NewInitCmd returns a command that initializes all necessary files for the daemon
+func NewInitCmd(mbm module.BasicManager, defaultNodeHome string) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "init [moniker]",
+		Short: "Initialize private validator, p2p, genesis, and application configuration files",
+		Long:  `Initialize validators's and node's configuration files.`,
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			// Get the node directory
+			nodeDir, _ := cmd.Flags().GetString(flags.FlagHome)
+			if nodeDir == "" {
+				nodeDir = defaultNodeHome
+			}
+
+			// Create the node directory if it doesn't exist
+			if err := os.MkdirAll(nodeDir, 0755); err != nil {
+				return err
+			}
+
+			// Create config directory
+			configDir := filepath.Join(nodeDir, "config")
+			if err := os.MkdirAll(configDir, 0755); err != nil {
+				return err
+			}
+
+			// Create data directory
+			dataDir := filepath.Join(nodeDir, "data")
+			if err := os.MkdirAll(dataDir, 0755); err != nil {
+				return err
+			}
+
+			// Get chain ID
+			chainID, _ := cmd.Flags().GetString("chain-id")
+			if chainID == "" {
+				chainID = "arkh-testnet-1"
+			}
+
+			// Create genesis file
+			genFile := filepath.Join(configDir, "genesis.json")
+			genDoc := &tmtypes.GenesisDoc{}
+			genDoc.ChainID = chainID
+			genDoc.GenesisTime = tmtime.Now()
+			genDoc.ConsensusParams = tmtypes.DefaultConsensusParams()
+
+			// Create default genesis state
+			appState, err := json.MarshalIndent(GetDefaultGenesis(), "", "  ")
+			if err != nil {
+				return err
+			}
+
+			genDoc.AppState = appState
+
+			// Save genesis file
+			if err := genDoc.SaveAs(genFile); err != nil {
+				return err
+			}
+
+			// Create basic config.toml
+			configFilePath := filepath.Join(configDir, "config.toml")
+			configFile := tmconfig.DefaultConfig()
+			configFile.SetRoot(nodeDir)
+			configFile.Moniker = args[0]
+			configFile.P2P.ListenAddress = "tcp://0.0.0.0:26656"
+			configFile.RPC.ListenAddress = "tcp://0.0.0.0:26657"
+			configFile.RPC.CORSAllowedOrigins = []string{"*"}
+			configFile.RPC.CORSAllowedMethods = []string{"HEAD", "GET", "POST"}
+			configFile.RPC.CORSAllowedHeaders = []string{"*"}
+
+			tmconfig.WriteConfigFile(configFilePath, configFile)
+
+			// Create basic app.toml
+			appConfigFilePath := filepath.Join(configDir, "app.toml")
+			appConfig := config.DefaultConfig()
+			appConfig.API.Enable = true
+			appConfig.API.Address = "tcp://0.0.0.0:1317"
+			appConfig.API.EnableUnsafeCORS = true
+			appConfig.GRPC.Enable = true
+			appConfig.GRPC.Address = "0.0.0.0:9090"
+			appConfig.GRPCWeb.Enable = true
+
+			config.WriteConfigFile(appConfigFilePath, appConfig)
+
+			// Print success message
+			fmt.Printf("Initialized node with moniker: %s\n", args[0])
+			fmt.Printf("Chain ID: %s\n", chainID)
+			fmt.Printf("Genesis file: %s\n", genFile)
+			fmt.Printf("Config file: %s\n", configFilePath)
+			fmt.Printf("App config file: %s\n", appConfigFilePath)
+
+			return nil
+		},
+	}
+
+	cmd.Flags().String(flags.FlagHome, defaultNodeHome, "The application home directory")
+	cmd.Flags().String("chain-id", "arkh-testnet-1", "genesis file chain-id, if left blank will be randomly created")
+	cmd.Flags().String("default-denom", "arkh", "genesis file default denomination, if left blank default value is 'stake'")
+	cmd.Flags().Int("initial-height", 1, "specify the initial block height at genesis")
+	cmd.Flags().BoolP("overwrite", "o", false, "overwrite the genesis.json file")
+	cmd.Flags().Bool("recover", false, "provide seed phrase to recover existing key instead of creating")
+
+	return cmd
 }
 
 // AddGenesisAccountCmd returns add-genesis-account cobra Command.
