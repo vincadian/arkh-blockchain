@@ -38,10 +38,16 @@ func NewConfig(dbm *dbm.MemDB) network.Config {
 
 // NewAppConstructor returns a new network AppConstructor.
 func NewAppConstructor(encodingCfg params.EncodingConfig, db *dbm.MemDB) network.AppConstructor {
+	appEnc := app.EncodingConfig{
+		InterfaceRegistry: encodingCfg.InterfaceRegistry,
+		Marshaler:         encodingCfg.Marshaler,
+		TxConfig:          encodingCfg.TxConfig,
+		Amino:             encodingCfg.Amino,
+	}
 	return func(val network.ValidatorI) servertypes.Application {
 		return app.NewLiquidityApp(
-			val.GetCtx().Logger, dbm.NewMemDB(), nil, true,
-			simtestutil.NewAppOptionsWithFlagHome(val.GetCtx().Config.RootDir),
+			val.GetCtx().Logger, dbm.NewMemDB(), nil, true, map[int64]bool{}, val.GetCtx().Config.RootDir, 0,
+			appEnc, simtestutil.NewAppOptionsWithFlagHome(val.GetCtx().Config.RootDir),
 			baseapp.SetPruning(pruningtypes.NewPruningOptionsFromString(val.GetAppConfig().Pruning)),
 			baseapp.SetMinGasPrices(val.GetAppConfig().MinGasPrices),
 			baseapp.SetChainID(val.GetCtx().Viper.GetString(flags.FlagChainID)),

@@ -1,37 +1,51 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
+	"runtime/debug"
 
 	cosmoslog "cosmossdk.io/log"
 	abci "github.com/cometbft/cometbft/abci/types"
+	cmtcmd "github.com/cometbft/cometbft/cmd/cometbft/commands"
 	tmconfig "github.com/cometbft/cometbft/config"
 	tmjson "github.com/cometbft/cometbft/libs/json"
-	"github.com/cometbft/cometbft/libs/log"
+	"github.com/cometbft/cometbft/privval"
 	tmos "github.com/cometbft/cometbft/libs/os"
 	tmtypes "github.com/cometbft/cometbft/types"
 	tmtime "github.com/cometbft/cometbft/types/time"
 	dbm "github.com/cosmos/cosmos-db"
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/client"
+	"github.com/cosmos/cosmos-sdk/client/docs"
 	"github.com/cosmos/cosmos-sdk/client/flags"
 	"github.com/cosmos/cosmos-sdk/client/keys"
+	"github.com/cosmos/cosmos-sdk/codec/address"
+	"github.com/cosmos/cosmos-sdk/server"
 	"github.com/cosmos/cosmos-sdk/server/api"
 	"github.com/cosmos/cosmos-sdk/server/config"
 	servertypes "github.com/cosmos/cosmos-sdk/server/types"
+	"github.com/spf13/cast"
 
 	// Note: tmservice moved in Cosmos SDK v0.53
 	storetypes "cosmossdk.io/store/types"
 	"github.com/cosmos/cosmos-sdk/codec"
+	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/codec/types"
+	cryptocodec "github.com/cosmos/cosmos-sdk/crypto/codec"
+	"github.com/cosmos/cosmos-sdk/crypto/keys/ed25519"
+	sdkmath "cosmossdk.io/math"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
+	"github.com/cosmos/cosmos-sdk/types/bech32"
 	"github.com/cosmos/cosmos-sdk/version"
 	"github.com/cosmos/cosmos-sdk/x/auth"
 
@@ -74,11 +88,14 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/mint"
 	mintkeeper "github.com/cosmos/cosmos-sdk/x/mint/keeper"
 	minttypes "github.com/cosmos/cosmos-sdk/x/mint/types"
+	"github.com/cosmos/cosmos-sdk/x/consensus/keeper"
+	consensusmoduletypes "github.com/cosmos/cosmos-sdk/x/consensus/types"
 	"github.com/cosmos/cosmos-sdk/x/params"
 
 	// Note: params client removed in Cosmos SDK v0.53
 	"cosmossdk.io/x/upgrade"
 	upgradekeeper "cosmossdk.io/x/upgrade/keeper"
+	corestore "cosmossdk.io/core/store"
 	upgradetypes "cosmossdk.io/x/upgrade/types"
 	paramskeeper "github.com/cosmos/cosmos-sdk/x/params/keeper"
 	paramstypes "github.com/cosmos/cosmos-sdk/x/params/types"
@@ -100,7 +117,7 @@ import (
 
 	// "github.com/spf13/cast"
 	"github.com/spf13/cobra"
-	// Note: tendermint/spm/cosmoscmd deprecated in Cosmos SDK v0.53
+	// Note: tendermint/spm/cosmoscmd deprecated in Cosmos SDK v0.53, now using CometBFT
 	tmcli "github.com/cometbft/cometbft/libs/cli"
 	// Temporarily commented out custom modules for Cosmos SDK v0.53 compatibility testing
 	// arkhmodule "github.com/vincadian/arkh-blockchain/x/arkh"
@@ -192,8 +209,13 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
-
 	DefaultNodeHome = filepath.Join(userHomeDir, "."+Name)
+
+	// Set bech32 prefixes so addresses in genesis and at runtime use "arkh" / "arkhvaloper"
+	cfg := sdk.GetConfig()
+	cfg.SetBech32PrefixForAccount("arkh", "arkhpub")
+	cfg.SetBech32PrefixForValidator("arkhvaloper", "arkhvaloperpub")
+	cfg.SetBech32PrefixForConsensusNode("arkhvalcons", "arkhvalconspub")
 }
 
 // App extends an ABCI application, but with most of its parameters exported.
@@ -248,7 +270,7 @@ type App struct {
 
 // New returns a reference to an initialized Gaia.
 func New(
-	logger log.Logger,
+	logger cosmoslog.Logger,
 	db dbm.DB,
 	traceStore io.Writer,
 	loadLatest bool,
@@ -262,18 +284,27 @@ func New(
 	legacyAmino := encodingConfig.Amino
 	interfaceRegistry := encodingConfig.InterfaceRegistry
 
-	// Convert logger to compatible type for Cosmos SDK v0.53
-	compatLogger := cosmoslog.NewNopLogger()
-	bApp := baseapp.NewBaseApp(Name, compatLogger, db, encodingConfig.TxConfig.TxDecoder())
+	// BaseApp uses the logger in InitChain (app.logger.Info); nil causes nil pointer dereference at 0x28.
+	if logger == nil {
+		logger = cosmoslog.NewNopLogger()
+	}
+	bApp := baseapp.NewBaseApp(Name, logger, db, encodingConfig.TxConfig.TxDecoder())
 	bApp.SetCommitMultiStoreTracer(traceStore)
 	bApp.SetVersion(version.Version)
 	bApp.SetInterfaceRegistry(interfaceRegistry)
+
+	// Apply server options (chain-id from flag/genesis, pruning, min-gas-prices, etc.). Required so BaseApp
+	// expects the same chain-id as InitChain (fixes "invalid chain-id on InitChain; expected: , got: arkh-testnet-1").
+	for _, opt := range server.DefaultBaseappOptions(appOpts) {
+		opt(bApp)
+	}
 
 	// Create store keys using the new Cosmos SDK v0.53 store service architecture
 	keys := storetypes.NewKVStoreKeys(
 		authtypes.StoreKey, banktypes.StoreKey, stakingtypes.StoreKey,
 		minttypes.StoreKey, distrtypes.StoreKey, slashingtypes.StoreKey,
 		govtypes.StoreKey, paramstypes.StoreKey, upgradetypes.StoreKey,
+		consensusmoduletypes.StoreKey,
 		// evidencetypes.StoreKey, // Evidence module not available
 		ibchost.StoreKey, ibctransfertypes.StoreKey,
 		authzkeeper.StoreKey, liquiditymoduletypes.StoreKey,
@@ -297,22 +328,58 @@ func New(
 
 	app.ParamsKeeper = initParamsKeeper(appCodec, legacyAmino, keys[paramstypes.StoreKey], tkeys[paramstypes.TStoreKey])
 
-	// set the BaseApp's parameter store
-	// Note: Parameter store handling has changed in Cosmos SDK v0.53
-	// bApp.SetParamStore(app.ParamsKeeper.Subspace(baseapp.Paramspace).WithKeyTable(paramstypes.ConsensusParamsKeyTable()))
+	// Consensus params store (required for InitChain/replay: "cannot store consensus params with no params store set").
+	consensusStoreSvc := &consensusStoreService{key: keys[consensusmoduletypes.StoreKey]}
+	consensusKeeper := keeper.NewKeeper(appCodec, consensusStoreSvc, authtypes.NewModuleAddress(govtypes.ModuleName).String(), nil)
+	bApp.SetParamStore(consensusKeeper.ParamsStore)
 
 	// Note: Capability module has been removed in Cosmos SDK v0.53
 	// IBC modules now handle capabilities internally
 	// this line is used by starport scaffolding # stargate/app/scopedKeeper
 
-	// add keepers
-	// Note: Keeper constructors have changed significantly in Cosmos SDK v0.53
-	// Note: AccountKeeper constructor signature changed significantly in Cosmos SDK v0.53
-	// For now, we'll create nil keepers to enable IBC functionality
-	// TODO: Implement full keeper constructors with new Cosmos SDK v0.53 API
-	// app.AccountKeeper = authkeeper.AccountKeeper{} // Placeholder
-	// app.BankKeeper = bankkeeper.Keeper{}           // Placeholder
-	// stakingKeeper := stakingkeeper.Keeper{}        // Placeholder
+	// keyStoreService adapts a store key to core/store.KVStoreService (same pattern as consensusStoreService).
+	keyStoreSvc := func(key *storetypes.KVStoreKey) *consensusStoreService { return &consensusStoreService{key: key} }
+
+	// Module account permissions for auth keeper (required for staking bonded/not_bonded pool addresses).
+	maccPerms := map[string][]string{
+		authtypes.FeeCollectorName:     {},
+		stakingtypes.BondedPoolName:    {"burner", "staking"},
+		stakingtypes.NotBondedPoolName: {"burner", "staking"},
+		distrtypes.ModuleName:          {},
+		minttypes.ModuleName:           {"minter"},
+		govtypes.ModuleName:            {"burner"},
+	}
+
+	// Auth keeper (required for InitGenesis and staking).
+	authStoreSvc := keyStoreSvc(keys[authtypes.StoreKey])
+	app.AccountKeeper = authkeeper.NewAccountKeeper(
+		appCodec, authStoreSvc, authtypes.ProtoBaseAccount, maccPerms,
+		address.NewBech32Codec("arkh"), "arkh", authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+	)
+
+	// Blocked module accounts for bank (cannot receive direct sends).
+	blockedAddrs := make(map[string]bool)
+	for name := range maccPerms {
+		if addr := app.AccountKeeper.GetModuleAddress(name); addr != nil {
+			blockedAddrs[addr.String()] = true
+		}
+	}
+
+	// Bank keeper (required for InitGenesis and staking).
+	bankStoreSvc := keyStoreSvc(keys[banktypes.StoreKey])
+	app.BankKeeper = bankkeeper.NewBaseKeeper(
+		appCodec, bankStoreSvc, app.AccountKeeper, blockedAddrs,
+		authtypes.NewModuleAddress(govtypes.ModuleName).String(), logger,
+	)
+
+	// Staking keeper (required for InitGenesis validator set).
+	stakingStoreSvc := keyStoreSvc(keys[stakingtypes.StoreKey])
+	app.StakingKeeper = *stakingkeeper.NewKeeper(
+		appCodec, stakingStoreSvc, app.AccountKeeper, app.BankKeeper,
+		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+		address.NewBech32Codec("arkhvaloper"), address.NewBech32Codec("arkhvalcons"),
+	)
+
 	// app.MintKeeper = mintkeeper.NewKeeper(
 	// 	appCodec, keys[minttypes.StoreKey], app.GetSubspace(minttypes.ModuleName), &stakingKeeper,
 	// 	app.AccountKeeper, app.BankKeeper, authtypes.FeeCollectorName,
@@ -411,22 +478,16 @@ func New(
 	// NOTE: Any module instantiated in the module manager that is later modified
 	// must be passed by reference here.
 
-	// Create a minimal module manager with IBC functionality
-	// Note: This is a simplified setup for IBC demonstration
-	// TODO: Implement full keeper constructors and complete module manager
+	// Module manager: at least auth, bank, staking, genutil so InitGenesis runs and validator set is set.
 	app.mm = module.NewManager(
-	// Basic modules (commented out until keepers are implemented)
-	// genutil.NewAppModule(app.AccountKeeper, app.StakingKeeper, app.BaseApp.DeliverTx, encodingConfig.TxConfig),
-	// auth.NewAppModule(appCodec, app.AccountKeeper, nil, app.GetSubspace(authtypes.ModuleName)),
-	// bank.NewAppModule(appCodec, app.BankKeeper, app.AccountKeeper),
-	// staking.NewAppModule(appCodec, app.StakingKeeper, app.AccountKeeper, app.BankKeeper),
-	// upgrade.NewAppModule(app.UpgradeKeeper),
-	// evidence.NewAppModule(app.EvidenceKeeper),
-	// params.NewAppModule(app.ParamsKeeper),
-
-	// IBC modules (commented out until IBC keepers are implemented)
-	// ibc.NewAppModule(app.IBCKeeper),
-	// transferModule,
+		genutil.NewAppModule(app.AccountKeeper, app.StakingKeeper, app, encodingConfig.TxConfig),
+		auth.NewAppModule(appCodec, app.AccountKeeper, nil, nil),
+		bank.NewAppModule(appCodec, app.BankKeeper, app.AccountKeeper, nil),
+		staking.NewAppModule(appCodec, &app.StakingKeeper, app.AccountKeeper, app.BankKeeper, nil),
+		// upgrade.NewAppModule(app.UpgradeKeeper),
+		// params.NewAppModule(app.ParamsKeeper),
+		// ibc.NewAppModule(app.IBCKeeper),
+		// transferModule,
 	)
 
 	// During begin block slashing happens after distr.BeginBlocker so that
@@ -453,26 +514,12 @@ func New(
 	// NOTE: Capability module must occur first so that it can initialize any capabilities
 	// so that other modules that want to create or claim capabilities afterwards in InitChain
 	// can do so safely.
-	// Set init genesis ordering for IBC functionality
+	// Init genesis order: only the modules we registered (auth, bank, staking, genutil) so staking runs and returns validator updates
 	app.mm.SetOrderInitGenesis(
 		authtypes.ModuleName,
 		banktypes.ModuleName,
-		distrtypes.ModuleName,
 		stakingtypes.ModuleName,
-		slashingtypes.ModuleName,
-		govtypes.ModuleName,
-		minttypes.ModuleName,
-		crisistypes.ModuleName,
-		ibchost.ModuleName,
 		genutiltypes.ModuleName,
-		// evidencetypes.ModuleName, // Evidence module not available
-		ibctransfertypes.ModuleName,
-		authz.ModuleName,
-		liquiditymoduletypes.ModuleName,
-		// arkhmoduletypes.ModuleName,
-		// toolmoduletypes.ModuleName,
-		// wasmmoduletypes.ModuleName,
-		// this line is used by starport scaffolding # stargate/app/initGenesis
 	)
 
 	// Register module invariants, routes, and services for IBC functionality
@@ -487,7 +534,7 @@ func New(
 
 	// initialize BaseApp for IBC functionality
 	// Note: Blocker functions commented out until proper keepers are implemented
-	// app.SetInitChainer(app.InitChainer)
+	app.SetInitChainer(app.InitChainer)
 	// app.SetPreBlocker(app.PreBlocker)
 	// app.SetBeginBlocker(app.BeginBlocker)
 
@@ -520,7 +567,7 @@ func New(
 }
 
 // NewLiquidityApp creates a new liquidity app for testing
-func NewLiquidityApp(logger log.Logger, db dbm.DB, traceStore io.Writer, loadLatest bool, skipUpgradeHeights map[int64]bool, homePath string, invCheckPeriod uint, encodingConfig EncodingConfig, appOpts servertypes.AppOptions, options ...func(*baseapp.BaseApp)) *App {
+func NewLiquidityApp(logger cosmoslog.Logger, db dbm.DB, traceStore io.Writer, loadLatest bool, skipUpgradeHeights map[int64]bool, homePath string, invCheckPeriod uint, encodingConfig EncodingConfig, appOpts servertypes.AppOptions, options ...func(*baseapp.BaseApp)) *App {
 	// For testing purposes, we'll use the same New function but with test-specific options
 	app := New(logger, db, traceStore, loadLatest, skipUpgradeHeights, homePath, invCheckPeriod, encodingConfig, appOpts)
 
@@ -554,16 +601,144 @@ func (app *App) EndBlocker(ctx sdk.Context, req abci.RequestFinalizeBlock) abci.
 	return abci.ResponseFinalizeBlock{}
 }
 
-// InitChainer application update at chain initialization
-func (app *App) InitChainer(ctx sdk.Context, req abci.RequestInitChain) abci.ResponseInitChain {
-	var genesisState GenesisState
-	if err := tmjson.Unmarshal(req.AppStateBytes, &genesisState); err != nil {
-		panic(err)
+// normalizeGenesisBech32 replaces cosmos bech32 prefixes with arkh in genesis JSON so that
+// genesis files or SDK defaults using "cosmos" decode correctly with our "arkh" codec.
+// Properly decodes and re-encodes addresses to preserve bech32 checksums.
+func normalizeGenesisBech32(genesisState GenesisState) {
+	// Use regexp to find bech32 addresses and replace them properly
+	// Bech32 format: prefix + "1" + base32 chars (qpzry9x8gf2tvdw0s3jn54khce6mua7l)
+	reCosmosValcons := regexp.MustCompile(`"cosmosvalcons1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]+"`)
+	reCosmosValoper := regexp.MustCompile(`"cosmosvaloper1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]+"`)
+	reCosmos := regexp.MustCompile(`"cosmos1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]+"`)
+	
+	for k := range genesisState {
+		b := genesisState[k]
+		if len(b) == 0 {
+			continue
+		}
+		// Replace each match by decoding and re-encoding
+		b = reCosmosValcons.ReplaceAllFunc(b, func(match []byte) []byte {
+			if len(match) < 3 {
+				return match
+			}
+			addrStr := string(match[1 : len(match)-1]) // Remove quotes
+			_, data, err := bech32.DecodeAndConvert(addrStr)
+			if err != nil {
+				return match // Return original if decode fails
+			}
+			newAddr, err := bech32.ConvertAndEncode("arkhvalcons", data)
+			if err != nil {
+				return match
+			}
+			return []byte(`"` + newAddr + `"`)
+		})
+		b = reCosmosValoper.ReplaceAllFunc(b, func(match []byte) []byte {
+			if len(match) < 3 {
+				return match
+			}
+			addrStr := string(match[1 : len(match)-1])
+			_, data, err := bech32.DecodeAndConvert(addrStr)
+			if err != nil {
+				return match
+			}
+			newAddr, err := bech32.ConvertAndEncode("arkhvaloper", data)
+			if err != nil {
+				return match
+			}
+			return []byte(`"` + newAddr + `"`)
+		})
+		b = reCosmos.ReplaceAllFunc(b, func(match []byte) []byte {
+			if len(match) < 3 {
+				return match
+			}
+			addrStr := string(match[1 : len(match)-1])
+			_, data, err := bech32.DecodeAndConvert(addrStr)
+			if err != nil {
+				return match
+			}
+			newAddr, err := bech32.ConvertAndEncode("arkh", data)
+			if err != nil {
+				return match
+			}
+			return []byte(`"` + newAddr + `"`)
+		})
+		genesisState[k] = b
 	}
-	// app.UpgradeKeeper.SetModuleVersionMap(ctx, app.mm.GetVersionMap())
-	// Note: Module manager InitGenesis signature changed in Cosmos SDK v0.53
-	// return app.mm.InitGenesis(ctx, app.appCodec, genesisState)
-	return abci.ResponseInitChain{}
+}
+
+// InitChainer application update at chain initialization.
+// Runs auth, bank, staking, genutil in order and returns staking's validator updates so the chain always gets a non-empty validator set when genesis has staking data.
+func (app *App) InitChainer(ctx sdk.Context, req *abci.RequestInitChain) (resp *abci.ResponseInitChain, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			debug.PrintStack() // print stack to stderr so we can see where the panic occurred
+			err = fmt.Errorf("InitChainer panic: %v", r)
+			resp = nil
+		}
+	}()
+	if req == nil {
+		return &abci.ResponseInitChain{}, nil
+	}
+	// Fail fast if context isn't ready (avoids nil dereference in store/param store later).
+	if ctx.MultiStore() == nil {
+		return nil, fmt.Errorf("InitChainer: context MultiStore is nil")
+	}
+	// ABCI++ / CometBFT can send InitChain with nil or partial ConsensusParams (e.g. Block == nil).
+	// BaseApp then uses GetConsensusParams() in FinalizeBlock etc.; if Block is nil we get nil pointer at 0x28.
+	// Ensure we always store full consensus params before any later use.
+	if req.ConsensusParams == nil || req.ConsensusParams.Block == nil {
+		defaultCp := tmtypes.DefaultConsensusParams().ToProto()
+		if err := app.StoreConsensusParams(ctx, defaultCp); err != nil {
+			return nil, fmt.Errorf("storing default consensus params: %w", err)
+		}
+	}
+	if req.AppStateBytes == nil {
+		return nil, fmt.Errorf("AppStateBytes is nil in RequestInitChain")
+	}
+	var genesisState GenesisState
+	if err = tmjson.Unmarshal(req.AppStateBytes, &genesisState); err != nil {
+		return nil, err
+	}
+	// Normalize so any "cosmos" addresses in genesis decode with our "arkh" codec
+	normalizeGenesisBech32(genesisState)
+	cdc, ok := app.appCodec.(codec.JSONCodec)
+	if !ok || cdc == nil {
+		return nil, fmt.Errorf("app codec does not implement JSONCodec")
+	}
+	if app.mm == nil || app.mm.Modules == nil {
+		return nil, fmt.Errorf("module manager not initialized")
+	}
+	var validatorUpdates []abci.ValidatorUpdate
+	// Run only auth, bank, staking. Skip genutil to avoid nil dereference (genutil uses app as DeliverTx and may run before state is ready).
+	order := []string{authtypes.ModuleName, banktypes.ModuleName, stakingtypes.ModuleName}
+	for _, moduleName := range order {
+		if genesisState[moduleName] == nil {
+			continue
+		}
+		mod := app.mm.Modules[moduleName]
+		if mod == nil {
+			continue
+		}
+		if m, ok := mod.(module.HasGenesis); ok {
+			m.InitGenesis(ctx, cdc, genesisState[moduleName])
+			continue
+		}
+		if m, ok := mod.(module.HasABCIGenesis); ok {
+			updates := m.InitGenesis(ctx, cdc, genesisState[moduleName])
+			if len(updates) > 0 && len(validatorUpdates) == 0 {
+				validatorUpdates = updates
+			}
+		}
+	}
+	// BaseApp handshake requires ResponseInitChain.Validators to match req.Validators when req.Validators is non-empty.
+	// Return req.Validators so the check passes; staking InitGenesis already ran and state is correct.
+	if len(req.Validators) > 0 {
+		return &abci.ResponseInitChain{Validators: req.Validators}, nil
+	}
+	if len(validatorUpdates) == 0 {
+		return nil, fmt.Errorf("validator set is empty after InitGenesis, please ensure at least one validator is initialized with a delegation greater than or equal to the DefaultPowerReduction (%d)", sdk.DefaultPowerReduction)
+	}
+	return &abci.ResponseInitChain{Validators: validatorUpdates}, nil
 }
 
 // LoadHeight loads a particular height
@@ -645,29 +820,74 @@ func (app *App) RegisterAPIRoutes(apiSvr *api.Server, apiConfig config.APIConfig
 	// Note: RegisterRESTRoutes removed in Cosmos SDK v0.53
 	ModuleBasics.RegisterGRPCGatewayRoutes(clientCtx, apiSvr.GRPCGatewayRouter)
 
-	// register app's OpenAPI routes.
-	apiSvr.Router.Handle("/static/openapi.yml", http.FileServer(http.Dir("./docs")))
-	apiSvr.Router.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html")
-		w.Write([]byte(`
-			<!DOCTYPE html>
-			<html>
-			<head>
-				<title>Arkh Blockchain API Documentation</title>
-				<meta charset="utf-8"/>
-				<meta name="viewport" content="width=device-width, initial-scale=1">
-				<link href="https://fonts.googleapis.com/css?family=Montserrat:300,400,700|Roboto:300,400,700" rel="stylesheet">
-				<style>
-					body { margin: 0; padding: 0; }
-				</style>
-			</head>
-			<body>
-				<redoc spec-url='/static/openapi.yml'></redoc>
-				<script src="https://cdn.jsdelivr.net/npm/redoc@next/bundles/redoc.standalone.js"> </script>
-			</body>
-			</html>
-		`))
-	})
+	// Swagger UI: same as Cosmos Hub — serve the SDK's embedded Swagger UI at /swagger/
+	if apiConfig.Swagger {
+		// Redirect / to /swagger/ so the API docs are the default page
+		apiSvr.Router.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/" {
+				http.Redirect(w, r, "/swagger/", http.StatusTemporaryRedirect)
+				return
+			}
+			http.NotFound(w, r)
+		})
+		apiSvr.Router.HandleFunc("/swagger", func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, "/swagger/", http.StatusMovedPermanently)
+		})
+		// SDK embed is //go:embed swagger-ui so paths are "swagger-ui/index.html", etc.
+		swaggerFS, err := fs.Sub(docs.SwaggerUI, "swagger-ui")
+		if err != nil {
+			swaggerFS = docs.SwaggerUI
+		}
+		// Serve swagger spec: prefer project's docs/static/openapi.yml (includes liquidity module) so liquidity GETs appear in the API docs.
+		apiSvr.Router.HandleFunc("/swagger/swagger.yaml", func(w http.ResponseWriter, r *http.Request) {
+			tryPaths := []string{
+				filepath.Join("docs", "static", "openapi.yml"),
+				"docs/static/openapi.yml",
+				"./docs/static/openapi.yml",
+			}
+			if execPath, err := os.Executable(); err == nil {
+				tryPaths = append(tryPaths, filepath.Join(filepath.Dir(execPath), "docs", "static", "openapi.yml"))
+			}
+			for _, p := range tryPaths {
+				body, err := os.ReadFile(p)
+				if err != nil {
+					continue
+				}
+				w.Header().Set("Content-Type", "application/x-yaml")
+				w.WriteHeader(http.StatusOK)
+				w.Write(body)
+				return
+			}
+			// Fallback: SDK's embedded spec (no liquidity)
+			f, err := swaggerFS.Open("swagger.yaml")
+			if err != nil {
+				f, _ = docs.SwaggerUI.Open("swagger-ui/swagger.yaml")
+			}
+			if f != nil {
+				defer f.Close()
+				w.Header().Set("Content-Type", "application/x-yaml")
+				_, _ = io.Copy(w, f)
+				return
+			}
+			http.NotFound(w, r)
+		})
+		// Serve index.html for /swagger/ so the Swagger UI loads (it then fetches ./swagger.yaml from same path)
+		apiSvr.Router.HandleFunc("/swagger/", func(w http.ResponseWriter, r *http.Request) {
+			f, err := swaggerFS.Open("index.html")
+			if err != nil {
+				f, err = docs.SwaggerUI.Open("swagger-ui/index.html")
+			}
+			if err != nil {
+				http.NotFound(w, r)
+				return
+			}
+			defer f.Close()
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			_, _ = io.Copy(w, f)
+		})
+		// Serve all other Swagger UI assets (swagger.yaml, .js, .css) under /swagger/
+		apiSvr.Router.PathPrefix("/swagger/").Handler(http.StripPrefix("/swagger/", http.FileServer(http.FS(swaggerFS))))
+	}
 }
 
 // RegisterTxService implements the Application.RegisterTxService method.
@@ -677,7 +897,7 @@ func (app *App) RegisterTxService(clientCtx client.Context) {
 
 // RegisterTendermintService implements the Application.RegisterTendermintService method.
 func (app *App) RegisterTendermintService(clientCtx client.Context) {
-	// Note: tmservice registration removed in Cosmos SDK v0.53
+	// Note: tmservice registration removed in Cosmos SDK v0.53, now using CometBFT
 }
 
 // RegisterNodeService implements the Application.RegisterNodeService method.
@@ -698,6 +918,7 @@ func GetMaccPerms() map[string][]string {
 func initParamsKeeper(appCodec codec.BinaryCodec, legacyAmino *codec.LegacyAmino, key, tkey storetypes.StoreKey) paramskeeper.Keeper {
 	paramsKeeper := paramskeeper.NewKeeper(appCodec, legacyAmino, key, tkey)
 
+	paramsKeeper.Subspace(baseapp.Paramspace).WithKeyTable(paramstypes.ConsensusParamsKeyTable())
 	paramsKeeper.Subspace(authtypes.ModuleName)
 	paramsKeeper.Subspace(banktypes.ModuleName)
 	paramsKeeper.Subspace(stakingtypes.ModuleName)
@@ -795,17 +1016,119 @@ func (app *App) LoadVersion(height int64) error {
 
 // MakeEncodingConfig creates an EncodingConfig for the application.
 func MakeEncodingConfig() EncodingConfig {
+	interfaceRegistry := types.NewInterfaceRegistry()
 	encodingConfig := EncodingConfig{
-		InterfaceRegistry: types.NewInterfaceRegistry(),
-		Marshaler:         codec.NewProtoCodec(types.NewInterfaceRegistry()),
-		TxConfig:          authtx.NewTxConfig(codec.NewProtoCodec(types.NewInterfaceRegistry()), authtx.DefaultSignModes),
+		InterfaceRegistry: interfaceRegistry,
+		Marshaler:         codec.NewProtoCodec(interfaceRegistry),
+		TxConfig:          authtx.NewTxConfig(codec.NewProtoCodec(interfaceRegistry), authtx.DefaultSignModes),
 		Amino:             codec.NewLegacyAmino(),
 	}
 
 	ModuleBasics.RegisterLegacyAminoCodec(encodingConfig.Amino)
 	ModuleBasics.RegisterInterfaces(encodingConfig.InterfaceRegistry)
+	// Register crypto types (ed25519.PubKey etc.) so auth genesis with BaseAccount marshals correctly
+	cryptocodec.RegisterInterfaces(encodingConfig.InterfaceRegistry)
 
 	return encodingConfig
+}
+
+// injectGenesisValidator adds a single validator and delegation to genesis so that
+// "validator set is empty after InitGenesis" is satisfied (delegation >= PowerReduction).
+func injectGenesisValidator(genesis map[string]json.RawMessage, encCfg EncodingConfig, consensusPubKeyBytes []byte, moniker string) error {
+	// Ensure genesis addresses use chain bech32 prefixes so staking keeper (arkhvaloper) can resolve them at runtime.
+	cfg := sdk.GetConfig()
+	cfg.SetBech32PrefixForAccount("arkh", "arkhpub")
+	cfg.SetBech32PrefixForValidator("arkhvaloper", "arkhvaloperpub")
+	cfg.SetBech32PrefixForConsensusNode("arkhvalcons", "arkhvalconspub")
+
+	// Minimum delegation must be >= DefaultPowerReduction; use 2e12 to be safely above
+	minDelegation := sdkmath.NewInt(2_000_000_000_000) // 2e12 base units
+	// Consensus power = tokens / PowerReduction (required for LastValidatorPower and LastTotalPower)
+	consensusPower := minDelegation.Quo(sdk.DefaultPowerReduction).Int64()
+
+	// Deterministic operator account from seed (dev validator)
+	operPriv := ed25519.GenPrivKeyFromSecret([]byte("arkh-dev-validator"))
+	operAccAddr := sdk.AccAddress(operPriv.PubKey().Address().Bytes())
+	operValAddr := sdk.ValAddress(operPriv.PubKey().Address().Bytes())
+
+	// SDK ed25519 pubkey from CometBFT consensus key bytes (32 bytes)
+	if len(consensusPubKeyBytes) != 32 {
+		return fmt.Errorf("consensus pubkey must be 32 bytes for ed25519, got %d", len(consensusPubKeyBytes))
+	}
+	sdkConsPubKey := &ed25519.PubKey{Key: consensusPubKeyBytes}
+
+	// Auth: add BaseAccount for operator
+	var authGenesis authtypes.GenesisState
+	if err := encCfg.Marshaler.UnmarshalJSON(genesis[authtypes.ModuleName], &authGenesis); err != nil {
+		return fmt.Errorf("unmarshal auth genesis: %w", err)
+	}
+	baseAcc := authtypes.NewBaseAccount(operAccAddr, operPriv.PubKey(), 0, 0)
+	accAny, err := codectypes.NewAnyWithValue(baseAcc)
+	if err != nil {
+		return fmt.Errorf("wrap base account: %w", err)
+	}
+	authGenesis.Accounts = append(authGenesis.Accounts, accAny)
+	genesis[authtypes.ModuleName], err = encCfg.Marshaler.MarshalJSON(&authGenesis)
+	if err != nil {
+		return fmt.Errorf("marshal auth genesis: %w", err)
+	}
+
+	// Bank: add balance for operator (for fees) and for staking bonded pool (required by staking InitGenesis)
+	var bankGenesis banktypes.GenesisState
+	if err := encCfg.Marshaler.UnmarshalJSON(genesis[banktypes.ModuleName], &bankGenesis); err != nil {
+		return fmt.Errorf("unmarshal bank genesis: %w", err)
+	}
+	// Operator balance (for fees etc.)
+	bankGenesis.Balances = append(bankGenesis.Balances, banktypes.Balance{
+		Address: operAccAddr.String(),
+		Coins:   sdk.NewCoins(sdk.NewCoin("arkh", minDelegation.MulRaw(10))),
+	})
+	// Staking bonded pool must hold the bonded tokens; staking InitGenesis checks bondedPool balance == sum(bonded validators)
+	bankGenesis.Balances = append(bankGenesis.Balances, banktypes.Balance{
+		Address: authtypes.NewModuleAddress(stakingtypes.BondedPoolName).String(),
+		Coins:   sdk.NewCoins(sdk.NewCoin("arkh", minDelegation)),
+	})
+	genesis[banktypes.ModuleName], err = encCfg.Marshaler.MarshalJSON(&bankGenesis)
+	if err != nil {
+		return fmt.Errorf("marshal bank genesis: %w", err)
+	}
+
+	// Staking: add Validator and Delegation
+	var stakingGenesis stakingtypes.GenesisState
+	if err := encCfg.Marshaler.UnmarshalJSON(genesis[stakingtypes.ModuleName], &stakingGenesis); err != nil {
+		return fmt.Errorf("unmarshal staking genesis: %w", err)
+	}
+	desc := stakingtypes.NewDescription(moniker, "", "", "", "")
+	val, err := stakingtypes.NewValidator(operValAddr.String(), sdkConsPubKey, desc)
+	if err != nil {
+		return fmt.Errorf("new validator: %w", err)
+	}
+	val.Tokens = minDelegation
+	val.DelegatorShares = sdkmath.LegacyNewDecFromInt(minDelegation)
+	val.Status = stakingtypes.Bonded
+	val.Commission = stakingtypes.NewCommission(sdkmath.LegacyZeroDec(), sdkmath.LegacyZeroDec(), sdkmath.LegacyZeroDec())
+	val.MinSelfDelegation = minDelegation
+	stakingGenesis.Validators = append(stakingGenesis.Validators, val)
+	stakingGenesis.Delegations = append(stakingGenesis.Delegations, stakingtypes.NewDelegation(
+		operAccAddr.String(),
+		operValAddr.String(),
+		sdkmath.LegacyNewDecFromInt(minDelegation),
+	))
+	stakingGenesis.LastValidatorPowers = append(stakingGenesis.LastValidatorPowers, stakingtypes.LastValidatorPower{
+		Address: operValAddr.String(),
+		Power:   consensusPower,
+	})
+	// LastTotalPower is sum of consensus powers (tokens / PowerReduction), not raw tokens
+	stakingGenesis.LastTotalPower = sdkmath.NewInt(consensusPower)
+	// Exported=true makes InitGenesis build ValidatorUpdates from LastValidatorPowers instead of
+	// ApplyAndReturnValidatorSetUpdates, avoiding power-index/pool ordering issues and ensuring
+	// the module returns our validator so "validator set is empty after InitGenesis" is resolved.
+	stakingGenesis.Exported = true
+	genesis[stakingtypes.ModuleName], err = encCfg.Marshaler.MarshalJSON(&stakingGenesis)
+	if err != nil {
+		return fmt.Errorf("marshal staking genesis: %w", err)
+	}
+	return nil
 }
 
 // GetDefaultGenesis returns the default genesis state with custom denominations
@@ -844,7 +1167,183 @@ func NewRootCmd() (*cobra.Command, error) {
 
 	initRootCmd(rootCmd, MakeEncodingConfig())
 
+	// AppCreator for server.StartCmd: uses cosmossdk.io/log.Logger to match servertypes.AppCreator
+	appCreator := func(logger cosmoslog.Logger, db dbm.DB, traceStore io.Writer, appOpts servertypes.AppOptions) servertypes.Application {
+		homePath := DefaultNodeHome
+		if v := appOpts.Get(flags.FlagHome); v != nil {
+			homePath = cast.ToString(v)
+		}
+		invCheckPeriod := uint(0)
+		if v := appOpts.Get(server.FlagInvCheckPeriod); v != nil {
+			invCheckPeriod = cast.ToUint(v)
+		}
+		skipUpgradeHeights := map[int64]bool{}
+		if v := appOpts.Get(server.FlagUnsafeSkipUpgrades); v != nil {
+			if heights, ok := v.([]int); ok {
+				for _, h := range heights {
+					skipUpgradeHeights[int64(h)] = true
+				}
+			}
+		}
+		return New(logger, db, traceStore, true, skipUpgradeHeights, homePath, invCheckPeriod, MakeEncodingConfig(), appOpts)
+	}
+
+	startCmd := server.StartCmd(appCreator, DefaultNodeHome)
+	// Ensure CometBFT config has non-nil RPC/P2P/Instrumentation so "no address to dial" or nil dereference at 0x28 is avoided.
+	wrapStartCmdWithSafeConfig(startCmd)
+	rootCmd.AddCommand(startCmd)
+
+	// Full reset: deletes both CometBFT state and application DB (fixes "invalid chain-id on InitChain" when stored chain-id is empty).
+	rootCmd.AddCommand(NewUnsafeResetAllCmd(DefaultNodeHome))
+
+	// CometBFT subcommands (reset-state, unsafe-reset-all for CometBFT only; use top-level unsafe-reset-all to also clear app DB)
+	cometCmd := &cobra.Command{
+		Use:   "comet",
+		Short: "CometBFT subcommands (reset-state, unsafe-reset-all, etc.)",
+	}
+	cometCmd.AddCommand(
+		cmtcmd.ResetStateCmd,
+		cmtcmd.ResetAllCmd,
+	)
+	rootCmd.AddCommand(cometCmd)
+
 	return rootCmd, nil
+}
+
+// wrapStartCmdWithSafeConfig ensures CometBFT config has non-nil RPC, P2P, Instrumentation
+// so that "no address to dial" or nil pointer dereference (e.g. at 0x28) is avoided when starting the node.
+func wrapStartCmdWithSafeConfig(startCmd *cobra.Command) {
+	origRunE := startCmd.RunE
+	if origRunE == nil {
+		return
+	}
+	startCmd.RunE = func(cmd *cobra.Command, args []string) error {
+		serverCtx := server.GetServerContextFromCmd(cmd)
+		if serverCtx == nil {
+			return fmt.Errorf("server context not set; run 'arkhd init <moniker>' first")
+		}
+		if serverCtx.Config == nil {
+			serverCtx.Config = tmconfig.DefaultConfig()
+		}
+		cfg := serverCtx.Config
+		if cfg.RPC == nil {
+			cfg.RPC = tmconfig.DefaultRPCConfig()
+		}
+		if cfg.P2P == nil {
+			cfg.P2P = tmconfig.DefaultP2PConfig()
+		}
+		if cfg.Instrumentation == nil {
+			cfg.Instrumentation = tmconfig.DefaultInstrumentationConfig()
+		}
+		// After unsafe-reset-all, data/ is removed so data/priv_validator_state.json is missing. Recreate it so start succeeds.
+		home := cfg.RootDir
+		if home != "" {
+			if err := ensurePrivValidatorStateFile(home); err != nil {
+				return err
+			}
+		}
+		// Force API and Swagger on so localhost:1317 works. SDK reads config via GetConfig(svrCtx.Viper)
+		// which Unmarshals using mapstructure tags "api" and "enable"/"address"/"swagger" -> keys "api.enable", "api.address", "api.swagger".
+		serverCtx.Viper.Set("api.enable", true)
+		serverCtx.Viper.Set("api.address", "tcp://0.0.0.0:1317")
+		serverCtx.Viper.Set("api.swagger", true)
+		return origRunE(cmd, args)
+	}
+}
+
+// ensurePrivValidatorStateFile creates data/priv_validator_state.json with initial content if missing.
+// CometBFT expects height as a JSON string (e.g. "height":"0" not "height":0). Required after unsafe-reset-all.
+func ensurePrivValidatorStateFile(home string) error {
+	dataDir := filepath.Join(home, "data")
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		return fmt.Errorf("creating data directory: %w", err)
+	}
+	stateFile := filepath.Join(dataDir, "priv_validator_state.json")
+	initialState := []byte(`{"height":"0","round":0,"step":0}`)
+	if _, err := os.Stat(stateFile); os.IsNotExist(err) {
+		if err := os.WriteFile(stateFile, initialState, 0600); err != nil {
+			return fmt.Errorf("creating %s: %w", stateFile, err)
+		}
+	}
+	return nil
+}
+
+// NewUnsafeResetAllCmd removes the data directory (CometBFT + application DB). Use this to fix
+// "invalid chain-id on InitChain; expected: , got: arkh-testnet-1" when the app had stored an empty chain-id.
+func NewUnsafeResetAllCmd(defaultHome string) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "unsafe-reset-all",
+		Short: "Remove data directory (blockstore, state, application DB) and restart from genesis",
+		Long:  "Remove the data directory at <home>/data. This deletes both CometBFT state and the application database, so the next start will run InitChain again from config/genesis.json. Use to fix chain-id handshake errors.",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			home, _ := cmd.Flags().GetString(flags.FlagHome)
+			if home == "" {
+				home = defaultHome
+			}
+			dataDir := filepath.Join(home, "data")
+			if err := os.RemoveAll(dataDir); err != nil {
+				return fmt.Errorf("failed to remove data directory %s: %w", dataDir, err)
+			}
+			fmt.Printf("Removed data directory: %s\n", dataDir)
+			fmt.Println("You can now run 'arkhd start' to start from genesis.")
+			return nil
+		},
+	}
+	cmd.Flags().String(flags.FlagHome, defaultHome, "The application home directory")
+	return cmd
+}
+
+// consensusStoreService adapts a store key to cosmossdk.io/core/store.KVStoreService so the consensus keeper can be used as BaseApp's ParamStore.
+type consensusStoreService struct {
+	key *storetypes.KVStoreKey
+}
+
+// OpenKVStore returns the KVStore for the consensus module from the context (sdk.Context).
+func (s consensusStoreService) OpenKVStore(ctx context.Context) corestore.KVStore {
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	ms := sdkCtx.MultiStore()
+	if ms == nil {
+		panic("consensusStoreService.OpenKVStore: MultiStore is nil")
+	}
+	kv := ms.GetKVStore(s.key)
+	if kv == nil {
+		panic("consensusStoreService.OpenKVStore: GetKVStore returned nil for key " + s.key.Name())
+	}
+	return coreStoreAdapter{kv}
+}
+
+// coreStoreAdapter wraps storetypes.KVStore to implement cosmossdk.io/core/store.KVStore (methods return error).
+type coreStoreAdapter struct {
+	storetypes.KVStore
+}
+
+func (a coreStoreAdapter) Get(key []byte) ([]byte, error) {
+	return a.KVStore.Get(key), nil
+}
+func (a coreStoreAdapter) Has(key []byte) (bool, error) {
+	return a.KVStore.Has(key), nil
+}
+func (a coreStoreAdapter) Set(key, value []byte) error {
+	a.KVStore.Set(key, value)
+	return nil
+}
+func (a coreStoreAdapter) Delete(key []byte) error {
+	a.KVStore.Delete(key)
+	return nil
+}
+func (a coreStoreAdapter) Iterator(start, end []byte) (corestore.Iterator, error) {
+	return a.KVStore.Iterator(start, end), nil
+}
+func (a coreStoreAdapter) ReverseIterator(start, end []byte) (corestore.Iterator, error) {
+	return a.KVStore.ReverseIterator(start, end), nil
+}
+
+// EmptyAppOptions is a stub implementing servertypes.AppOptions with empty values.
+type EmptyAppOptions struct{}
+
+// Get implements servertypes.AppOptions
+func (ao EmptyAppOptions) Get(string) interface{} {
+	return nil
 }
 
 // initRootCmd initializes the root command
@@ -852,12 +1351,31 @@ func initRootCmd(rootCmd *cobra.Command, encodingConfig EncodingConfig) {
 	// Register module commands selectively to avoid issues with incomplete modules
 	// Only register commands for modules that have proper CLI implementations
 
+	// Set up server and config interceptors so start command gets correct home/config (Cosmos SDK standard).
+	// Also set client context with TxConfig/Codec/InterfaceRegistry so gRPC reflection (SignModeHandler) does not panic with nil pointer.
+	initClientCtx := client.Context{}.
+		WithCodec(encodingConfig.Marshaler).
+		WithTxConfig(encodingConfig.TxConfig).
+		WithInterfaceRegistry(encodingConfig.InterfaceRegistry).
+		WithLegacyAmino(encodingConfig.Amino).
+		WithInput(os.Stdin).
+		WithAccountRetriever(authtypes.AccountRetriever{}).
+		WithHomeDir(DefaultNodeHome).
+		WithViper("ARKH")
+	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, _ []string) error {
+		if err := server.InterceptConfigsPreRunHandler(cmd, "", config.DefaultConfig(), tmconfig.DefaultConfig()); err != nil {
+			return err
+		}
+		initClientCtx := initClientCtx.WithCmdContext(cmd.Context())
+		return client.SetCmdClientContextHandler(initClientCtx, cmd)
+	}
+
 	// Set up keyring configuration
 	rootCmd.PersistentFlags().String(flags.FlagHome, DefaultNodeHome, "The application home directory")
 	rootCmd.PersistentFlags().String(flags.FlagKeyringBackend, flags.DefaultKeyringBackend, "Select keyring's backend (os|file|kwallet|pass|test)")
 	rootCmd.PersistentFlags().String(flags.FlagChainID, "arkh-testnet-1", "The network chain ID")
 
-	// Add Tendermint CLI commands for standard functionality
+	// Add CometBFT CLI commands for standard functionality
 	rootCmd.AddCommand(tmcli.NewCompletionCmd(rootCmd, true))
 
 	// Add genesis-related commands
@@ -974,19 +1492,6 @@ func initRootCmd(rootCmd *cobra.Command, encodingConfig EncodingConfig) {
 		},
 	)
 
-	// Add additional commands
-	rootCmd.AddCommand(
-		&cobra.Command{
-			Use:   "start",
-			Short: "Run the full node",
-			RunE: func(cmd *cobra.Command, args []string) error {
-				fmt.Println("Starting Arkh Blockchain node...")
-				fmt.Println("Node is running (placeholder implementation)")
-				return nil
-			},
-		},
-	)
-
 }
 
 // NewInitCmd returns a command that initializes all necessary files for the daemon
@@ -1033,12 +1538,48 @@ func NewInitCmd(mbm module.BasicManager, defaultNodeHome string) *cobra.Command 
 			genDoc.GenesisTime = tmtime.Now()
 			genDoc.ConsensusParams = tmtypes.DefaultConsensusParams()
 
-			// Create default genesis state
-			appState, err := json.MarshalIndent(GetDefaultGenesis(), "", "  ")
+			// Default genesis state (map) — we'll inject validator and then marshal
+			genesisMap := GetDefaultGenesis()
+
+			// Ensure at least one validator so CometBFT does not error with "validator set is nil in genesis and still empty after InitChain"
+			keyFile := filepath.Join(configDir, "priv_validator_key.json")
+			stateFile := filepath.Join(configDir, "priv_validator_state.json")
+			initialState := []byte(`{"height":"0","round":0,"step":0}`)
+			// CometBFT LoadOrGenFilePV opens the state file; create it with initial content if missing
+			if _, err := os.Stat(stateFile); os.IsNotExist(err) {
+				if err := os.WriteFile(stateFile, initialState, 0600); err != nil {
+					return fmt.Errorf("creating priv_validator_state.json: %w", err)
+				}
+			}
+			// Node at runtime may expect state in data/; create there too so "open data/priv_validator_state.json" succeeds
+			stateFileInData := filepath.Join(dataDir, "priv_validator_state.json")
+			if _, err := os.Stat(stateFileInData); os.IsNotExist(err) {
+				if err := os.WriteFile(stateFileInData, initialState, 0600); err != nil {
+					return fmt.Errorf("creating data/priv_validator_state.json: %w", err)
+				}
+			}
+			pv := privval.LoadOrGenFilePV(keyFile, stateFile)
+			pubKey, err := pv.GetPubKey()
+			if err != nil {
+				return fmt.Errorf("getting validator pubkey: %w", err)
+			}
+			// Inject staking validator + delegation so "validator set is empty after InitGenesis" is satisfied
+			if err := injectGenesisValidator(genesisMap, MakeEncodingConfig(), pubKey.Bytes(), args[0]); err != nil {
+				return fmt.Errorf("injecting genesis validator: %w", err)
+			}
+			pv.Save()
+
+			genDoc.Validators = []tmtypes.GenesisValidator{{
+				Address: pv.GetAddress(),
+				PubKey:  pubKey,
+				Power:   1,
+				Name:    args[0],
+			}}
+
+			appState, err := json.MarshalIndent(genesisMap, "", "  ")
 			if err != nil {
 				return err
 			}
-
 			genDoc.AppState = appState
 
 			// Save genesis file
@@ -1059,9 +1600,10 @@ func NewInitCmd(mbm module.BasicManager, defaultNodeHome string) *cobra.Command 
 
 			tmconfig.WriteConfigFile(configFilePath, configFile)
 
-			// Create basic app.toml
+			// Create basic app.toml (MinGasPrices required: empty causes "set min gas price in app.toml or flag or env variable")
 			appConfigFilePath := filepath.Join(configDir, "app.toml")
 			appConfig := config.DefaultConfig()
+			appConfig.MinGasPrices = "0.0000000001arkh"
 			appConfig.API.Enable = true
 			appConfig.API.Address = "tcp://0.0.0.0:1317"
 			appConfig.API.EnableUnsafeCORS = true
